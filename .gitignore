@@ -10,9 +10,6 @@ node_modules/
 dist/
 build/
 
-# Uploads (user-generated content)
-backend/uploads/
-
 # Logs & debug
 *.log
 npm-debug.log*
