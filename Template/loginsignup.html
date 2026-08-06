@@ -1,0 +1,464 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Travelista Tours - Login</title>
+    
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Dancing+Script:wght@700&family=Montserrat:wght@400;500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- Font Awesome for Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <style>
+        :root {
+            --primary-blue: #0ea5e9;
+            --light-blue: #8fd1f5;
+            --text-dark: #333333;
+            --text-gray: #7a7a7a;
+            --bg-gray: #f4f7f6;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Montserrat', sans-serif;
+        }
+
+        body {
+            height: 100vh;
+            display: flex;
+            background-color: #fff;
+            overflow: hidden; /* Prevent scrolling on desktop */
+        }
+
+        /* --- Layout --- */
+        .split-container {
+            display: flex;
+            width: 100%;
+            height: 100%;
+        }
+
+        /* --- Left Panel --- */
+        .left-panel {
+            flex: 1;
+            background: linear-gradient(to bottom, rgba(0,0,0,0.1), rgba(0,0,0,0.1)), url('image_d3671b.jpg');
+            background-size: cover;
+            background-position: center;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding-top: 10%;
+            color: white;
+            text-align: center;
+        }
+
+        .brand-title {
+            font-family: 'Dancing Script', cursive;
+            font-size: 4.5rem;
+            margin-bottom: 1rem;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+            letter-spacing: 2px;
+        }
+
+        .brand-subtitle {
+            font-size: 1rem;
+            font-weight: 500;
+            max-width: 80%;
+            line-height: 1.5;
+            text-shadow: 1px 1px 3px rgba(0,0,0,0.4);
+        }
+
+        /* --- Right Panel --- */
+        .right-panel {
+            flex: 1;
+            position: relative;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background: white;
+        }
+
+        /* Top Right Airplane Decor */
+        .plane-decor {
+            position: absolute;
+            top: 30px;
+            right: 30px;
+            color: var(--primary-blue);
+            font-size: 1.5rem;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            opacity: 0.8;
+        }
+        
+        .dash-line {
+            width: 80px;
+            height: 30px;
+            border-top: 2px dashed var(--primary-blue);
+            border-radius: 50%;
+            margin-top: 15px;
+        }
+
+        /* Bottom Monument Decor */
+        .monument-decor {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            height: 120px;
+            background-image: url('data:image/svg+xml;utf8,<svg viewBox="0 0 1000 200" xmlns="http://www.w3.org/2000/svg"><path fill="%230ea5e9" d="M100,200 L100,120 L120,120 L120,90 L140,60 L160,90 L160,120 L180,120 L180,200 Z M300,200 L300,80 L350,20 L400,80 L400,200 Z M600,200 L600,100 L630,100 L640,50 L650,100 L680,100 L680,200 Z M850,200 L820,150 L840,150 L840,50 L860,50 L860,150 L880,150 Z" opacity="0.9"/></svg>');
+            background-size: cover;
+            background-position: bottom;
+            background-repeat: no-repeat;
+            pointer-events: none; /* Allows clicking through the decoration */
+        }
+
+        /* --- Form Container Logic --- */
+        .forms-wrapper {
+            width: 100%;
+            max-width: 450px;
+            padding: 2rem;
+            position: relative;
+            z-index: 10;
+            margin-bottom: 60px; /* Space for monuments */
+        }
+
+        .form-box {
+            display: none;
+            animation: fadeIn 0.4s ease-in-out;
+        }
+
+        .form-box.active {
+            display: block;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* --- Form Typography --- */
+        .form-header {
+            text-align: center;
+            margin-bottom: 2rem;
+        }
+
+        .form-header h2 {
+            color: var(--primary-blue);
+            font-size: 2.8rem;
+            font-weight: 700;
+            margin-bottom: 0.2rem;
+        }
+
+        .form-header p {
+            color: var(--text-gray);
+            font-size: 0.95rem;
+            font-weight: 500;
+        }
+
+        /* --- Inputs --- */
+        .input-group {
+            position: relative;
+            margin-bottom: 1.8rem;
+        }
+
+        .input-group input {
+            width: 100%;
+            padding: 14px 14px 14px 45px;
+            border: 2px solid var(--light-blue);
+            border-radius: 10px;
+            font-size: 0.95rem;
+            outline: none;
+            color: var(--text-dark);
+            background: transparent;
+            transition: border-color 0.3s;
+        }
+
+        .input-group input:focus {
+            border-color: var(--primary-blue);
+        }
+
+        .input-group .icon {
+            position: absolute;
+            left: 15px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: var(--text-dark);
+            font-size: 1.1rem;
+        }
+
+        /* Floating Label Effect */
+        .input-group label {
+            position: absolute;
+            left: 35px;
+            top: -10px;
+            background-color: white;
+            padding: 0 8px;
+            color: var(--primary-blue);
+            font-size: 0.8rem;
+            font-weight: 600;
+        }
+
+        /* --- Links & Buttons --- */
+        .forgot-link {
+            display: block;
+            text-align: right;
+            color: var(--text-gray);
+            text-decoration: none;
+            font-size: 0.85rem;
+            margin-top: -15px;
+            margin-bottom: 25px;
+            font-weight: 500;
+        }
+
+        .forgot-link:hover {
+            color: var(--primary-blue);
+        }
+
+        .btn-submit {
+            width: 100%;
+            padding: 14px;
+            background-color: var(--primary-blue);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            box-shadow: 0 4px 15px rgba(14, 165, 233, 0.3);
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .btn-submit:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(14, 165, 233, 0.4);
+        }
+
+        /* --- Social Login --- */
+        .divider {
+            display: flex;
+            align-items: center;
+            text-align: center;
+            margin: 25px 0;
+            color: var(--text-dark);
+            font-size: 0.9rem;
+            font-weight: 500;
+        }
+
+        .divider::before, .divider::after {
+            content: '';
+            flex: 1;
+            border-bottom: 1px solid #e0e0e0;
+        }
+
+        .divider::before { margin-right: .5em; }
+        .divider::after { margin-left: .5em; }
+
+        .social-login {
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+            margin-bottom: 30px;
+        }
+
+        .social-btn {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            width: 80px;
+            height: 50px;
+            background-color: var(--bg-gray);
+            border-radius: 12px;
+            text-decoration: none;
+            font-size: 1.5rem;
+            transition: background-color 0.3s;
+        }
+        
+        .social-btn:hover { background-color: #e2e8e4; }
+        .social-btn.google { color: #DB4437; }
+        .social-btn.facebook { color: #4267B2; }
+        .social-btn.apple { color: #000000; }
+
+        .toggle-text {
+            text-align: center;
+            font-size: 0.9rem;
+            color: var(--text-dark);
+            font-weight: 500;
+        }
+
+        .toggle-text a {
+            color: var(--text-dark);
+            font-weight: 700;
+            text-decoration: none;
+            margin-left: 5px;
+        }
+
+        .toggle-text a:hover {
+            text-decoration: underline;
+            color: var(--primary-blue);
+        }
+
+        /* --- Responsive Design --- */
+        @media (max-width: 900px) {
+            body {
+                overflow-y: auto; /* Allow scroll on mobile */
+            }
+            .split-container {
+                flex-direction: column;
+            }
+            .left-panel {
+                flex: none;
+                height: 35vh;
+                padding-top: 15%;
+            }
+            .brand-title {
+                font-size: 3rem;
+            }
+            .right-panel {
+                flex: none;
+                min-height: 65vh;
+                border-radius: 30px 30px 0 0;
+                margin-top: -30px;
+                padding-top: 20px;
+            }
+            .plane-decor {
+                top: 15px;
+                right: 20px;
+            }
+            .monument-decor {
+                opacity: 0.4; /* Fade out slightly on mobile so it doesn't block UI */
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="split-container">
+        
+        <!-- Left Panel (Image & Brand) -->
+        <div class="left-panel">
+            <div class="brand-title">Travelista Tours</div>
+            <div class="brand-subtitle">Travel is the only purchase that enriches you in ways beyond material wealth</div>
+        </div>
+
+        <!-- Right Panel (Forms) -->
+        <div class="right-panel">
+            
+            <!-- Airplane Decoration -->
+            <div class="plane-decor">
+                <i class="fa-solid fa-plane"></i>
+                <div class="dash-line"></div>
+            </div>
+
+            <div class="forms-wrapper">
+                
+                <!-- LOGIN FORM -->
+                <div id="loginForm" class="form-box active">
+                    <div class="form-header">
+                        <h2>Welcome</h2>
+                        <p>Login with Email</p>
+                    </div>
+
+                    <form onsubmit="event.preventDefault();">
+                        <div class="input-group">
+                            <label>Email Id</label>
+                            <i class="fa-regular fa-envelope icon"></i>
+                            <input type="email" placeholder="thisuix@mail.com" required>
+                        </div>
+
+                        <div class="input-group">
+                            <label>Password</label>
+                            <i class="fa-solid fa-unlock-keyhole icon"></i>
+                            <input type="password" placeholder="****************" required>
+                        </div>
+
+                        <a href="#" class="forgot-link">Forgot your password?</a>
+
+                        <button type="submit" class="btn-submit">LOGIN</button>
+                    </form>
+
+                    <div class="divider">OR</div>
+
+                    <div class="social-login">
+                        <a href="#" class="social-btn google"><i class="fa-brands fa-google"></i></a>
+                        <a href="#" class="social-btn facebook"><i class="fa-brands fa-facebook-f"></i></a>
+                        <a href="#" class="social-btn apple"><i class="fa-brands fa-apple"></i></a>
+                    </div>
+
+                    <p class="toggle-text">Don't have account? <a href="#" id="showRegister">Register Now</a></p>
+                </div>
+
+                <!-- SIGN UP FORM (Toggle target) -->
+                <div id="registerForm" class="form-box">
+                    <div class="form-header">
+                        <h2>Join Us</h2>
+                        <p>Create your account</p>
+                    </div>
+
+                    <form onsubmit="event.preventDefault();">
+                        <div class="input-group">
+                            <label>Full Name</label>
+                            <i class="fa-regular fa-user icon"></i>
+                            <input type="text" placeholder="John Doe" required>
+                        </div>
+
+                        <div class="input-group">
+                            <label>Email Id</label>
+                            <i class="fa-regular fa-envelope icon"></i>
+                            <input type="email" placeholder="thisuix@mail.com" required>
+                        </div>
+
+                        <div class="input-group">
+                            <label>Password</label>
+                            <i class="fa-solid fa-unlock-keyhole icon"></i>
+                            <input type="password" placeholder="****************" required>
+                        </div>
+
+                        <button type="submit" class="btn-submit" style="margin-top: 10px;">SIGN UP</button>
+                    </form>
+
+                    <div class="divider">OR</div>
+
+                    <div class="social-login">
+                        <a href="#" class="social-btn google"><i class="fa-brands fa-google"></i></a>
+                        <a href="#" class="social-btn facebook"><i class="fa-brands fa-facebook-f"></i></a>
+                        <a href="#" class="social-btn apple"><i class="fa-brands fa-apple"></i></a>
+                    </div>
+
+                    <p class="toggle-text">Already have an account? <a href="#" id="showLogin">Login Here</a></p>
+                </div>
+
+            </div>
+
+            <!-- Bottom Monuments Decoration -->
+            <div class="monument-decor"></div>
+            
+        </div>
+    </div>
+
+    <!-- JavaScript for Toggle -->
+    <script>
+        const loginForm = document.getElementById('loginForm');
+        const registerForm = document.getElementById('registerForm');
+        const showRegisterBtn = document.getElementById('showRegister');
+        const showLoginBtn = document.getElementById('showLogin');
+
+        showRegisterBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            loginForm.classList.remove('active');
+            registerForm.classList.add('active');
+        });
+
+        showLoginBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            registerForm.classList.remove('active');
+            loginForm.classList.add('active');
+        });
+    </script>
+</body>
+</html>

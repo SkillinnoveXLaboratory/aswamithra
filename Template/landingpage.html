@@ -1,0 +1,1105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Agrile - Organic Food Delivery</title>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <!-- Font Awesome for Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <style>
+        :root {
+            --primary-green: #118a38;
+            --dark-green: #0a4d1f;
+            --light-green: #e9f5ed;
+            --yellow: #fbb70f;
+            --text-dark: #1a2421;
+            --text-gray: #666;
+            --white: #ffffff;
+            --bg-light: #f9f9f9;
+            --font-main: 'Outfit', sans-serif;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: var(--font-main);
+            color: var(--text-dark);
+            background-color: var(--white);
+            overflow-x: hidden;
+        }
+
+        a { text-decoration: none; color: inherit; }
+        ul { list-style: none; }
+        img { max-width: 100%; display: block; }
+        
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 0 20px;
+        }
+
+        /* Buttons */
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 12px 28px;
+            border-radius: 30px;
+            font-weight: 600;
+            font-size: 15px;
+            transition: all 0.3s ease;
+            cursor: pointer;
+            border: none;
+        }
+        .btn-green {
+            background-color: var(--primary-green);
+            color: var(--white);
+        }
+        .btn-green:hover {
+            background-color: var(--dark-green);
+        }
+        .btn-yellow {
+            background-color: var(--yellow);
+            color: var(--text-dark);
+            width: 100%;
+        }
+        .btn-yellow:hover {
+            background-color: #e5a60d;
+        }
+        .btn i { margin-left: 8px; }
+
+        /* Typography */
+        h1, h2, h3, h4 { font-weight: 700; line-height: 1.2; }
+        .section-subtitle {
+            color: var(--primary-green);
+            font-size: 14px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 15px;
+        }
+        .section-subtitle i { font-size: 16px; }
+
+        /* ================= NAVBAR ================= */
+        .navbar {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            z-index: 1000;
+            padding: 20px 0;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+        }
+        .nav-container {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 28px;
+            font-weight: 800;
+            color: var(--white);
+        }
+        .logo i { color: var(--primary-green); }
+        
+        .nav-links {
+            display: flex;
+            gap: 25px;
+        }
+        .nav-links li a {
+            color: var(--white);
+            font-weight: 500;
+            font-size: 15px;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+        .nav-links li a:hover { color: var(--primary-green); }
+        .nav-links li a i { font-size: 10px; }
+
+        .nav-right {
+            display: flex;
+            align-items: center;
+            gap: 25px;
+            color: var(--white);
+        }
+        .contact-info {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .contact-info .icon {
+            color: var(--yellow);
+            font-size: 24px;
+        }
+        .contact-info .text p { font-size: 12px; color: #ddd; margin-bottom: 3px;}
+        .contact-info .text h4 { font-size: 16px; margin: 0; }
+        
+        .nav-actions {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+        .cart-icon { position: relative; }
+        .cart-badge {
+            position: absolute;
+            top: -8px;
+            right: -8px;
+            background: var(--yellow);
+            color: var(--text-dark);
+            font-size: 10px;
+            font-weight: bold;
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .hamburger {
+            display: none;
+            font-size: 24px;
+            color: var(--white);
+            cursor: pointer;
+        }
+
+        /* Sidebar (Mobile) */
+        .sidebar-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            z-index: 1001;
+            display: none;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+        .sidebar {
+            position: fixed;
+            top: 0;
+            right: -300px;
+            width: 300px;
+            height: 100vh;
+            background: var(--white);
+            z-index: 1002;
+            padding: 30px 20px;
+            box-shadow: -5px 0 15px rgba(0,0,0,0.1);
+            transition: right 0.3s ease;
+            overflow-y: auto;
+        }
+        .sidebar.active { right: 0; }
+        .sidebar-overlay.active { display: block; opacity: 1; }
+        .close-btn {
+            font-size: 24px;
+            color: var(--text-dark);
+            cursor: pointer;
+            text-align: right;
+            margin-bottom: 20px;
+        }
+        .sidebar .nav-links {
+            flex-direction: column;
+            gap: 15px;
+        }
+        .sidebar .nav-links li a { color: var(--text-dark); font-size: 18px;}
+        .sidebar .contact-info { margin-top: 30px; color: var(--text-dark); }
+        .sidebar .contact-info .text p { color: var(--text-gray); }
+
+        /* ================= HERO SECTION ================= */
+        .hero {
+            position: relative;
+            min-height: 100vh;
+            background: linear-gradient(rgba(0,0,0,0.4), rgba(0,0,0,0.6)), url('https://images.unsplash.com/photo-1625246333195-78d9c38ad449?q=80&w=2070&auto=format&fit=crop') no-repeat center center/cover;
+            display: flex;
+            align-items: center;
+            padding-top: 100px;
+        }
+        .hero-content {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            width: 100%;
+            position: relative;
+            z-index: 2;
+        }
+        .hero-text {
+            flex: 1;
+            color: var(--white);
+            max-width: 600px;
+        }
+        .hero-text h1 {
+            font-size: 70px;
+            margin-bottom: 20px;
+            display: flex;
+            flex-direction: column;
+        }
+        .hero-text h1 i {
+            color: #4ade80;
+            font-size: 40px;
+            margin-bottom: -10px;
+        }
+        .hero-text p {
+            font-size: 18px;
+            margin-bottom: 40px;
+            line-height: 1.6;
+        }
+        .hero-image {
+            flex: 1;
+            display: flex;
+            justify-content: center;
+            align-items: flex-end;
+            height: 100%;
+        }
+        .hero-image img {
+            max-height: 80vh;
+            object-fit: contain;
+        }
+        .wave-bottom {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            overflow: hidden;
+            line-height: 0;
+        }
+        .wave-bottom svg {
+            position: relative;
+            display: block;
+            width: calc(100% + 1.3px);
+            height: 80px;
+        }
+        .wave-bottom .shape-fill { fill: var(--white); }
+
+        /* ================= ABOUT SECTION ================= */
+        .about {
+            padding: 100px 0;
+            background: var(--white);
+        }
+        .about-container {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 60px;
+            align-items: center;
+        }
+        .about-images {
+            position: relative;
+            height: 600px;
+        }
+        .leaf-img-1 {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 80%;
+            height: 80%;
+            object-fit: cover;
+            border-radius: 300px 0 300px 300px; /* Leaf shape approximation */
+        }
+        .leaf-img-2 {
+            position: absolute;
+            bottom: 0;
+            right: 0;
+            width: 50%;
+            height: 50%;
+            object-fit: cover;
+            border-radius: 50%;
+            border: 10px solid var(--white);
+        }
+        .floating-leaf {
+            position: absolute;
+            top: 20%;
+            right: 10%;
+            width: 40px;
+            animation: float 3s ease-in-out infinite;
+        }
+        .about-text h2 {
+            font-size: 48px;
+            margin-bottom: 25px;
+        }
+        .about-text p {
+            color: var(--text-gray);
+            line-height: 1.8;
+            margin-bottom: 30px;
+        }
+        .features {
+            display: flex;
+            gap: 30px;
+            margin-bottom: 40px;
+        }
+        .feature-item {
+            display: flex;
+            gap: 15px;
+            align-items: flex-start;
+        }
+        .feature-icon {
+            width: 50px;
+            height: 50px;
+            background: var(--light-green);
+            color: var(--primary-green);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            flex-shrink: 0;
+        }
+        .feature-text h4 { margin-bottom: 5px; font-size: 18px; }
+        .feature-text p { font-size: 14px; margin-bottom: 0; }
+        .about-footer {
+            display: flex;
+            align-items: center;
+            gap: 30px;
+            padding-top: 30px;
+            border-top: 1px solid #eee;
+        }
+        .signature {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .signature-font { font-family: cursive; font-size: 24px; color: var(--primary-green); }
+        .signature-text { font-size: 12px; color: var(--text-gray); }
+
+        /* ================= SERVICES SECTION ================= */
+        .services {
+            padding: 80px 0;
+            background: var(--white);
+        }
+        .services-wrapper {
+            display: flex;
+            gap: 40px;
+        }
+        .services-header {
+            width: 25%;
+        }
+        .services-header h2 {
+            font-size: 40px;
+            margin-bottom: 30px;
+        }
+        .best-service-badge {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+        .badge-icon {
+            width: 60px;
+            height: 60px;
+            background: var(--white);
+            border: 2px dashed var(--primary-green);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            color: var(--primary-green);
+        }
+        .badge-text h4 { font-size: 16px; margin-bottom: 3px; }
+        .badge-text p { font-size: 12px; color: var(--text-gray); margin-bottom: 3px; }
+        .stars { color: var(--yellow); font-size: 12px; }
+
+        .services-grid {
+            width: 75%;
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 20px;
+        }
+        .service-card {
+            position: relative;
+            border-radius: 20px;
+            overflow: hidden;
+            height: 350px;
+        }
+        .service-card img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            transition: transform 0.5s;
+        }
+        .service-card:hover img { transform: scale(1.1); }
+        .service-content {
+            position: absolute;
+            bottom: 10px;
+            left: 10px;
+            right: 10px;
+            background: var(--white);
+            padding: 20px;
+            border-radius: 15px;
+            text-align: left;
+        }
+        .service-icon {
+            color: var(--primary-green);
+            font-size: 24px;
+            margin-bottom: 10px;
+        }
+        .service-content h4 { font-size: 18px; margin-bottom: 8px; }
+        .service-content p { font-size: 12px; color: var(--text-gray); line-height: 1.4; }
+        .arrow-btn {
+            position: absolute;
+            right: 15px;
+            top: -15px;
+            width: 35px;
+            height: 35px;
+            background: var(--primary-green);
+            color: var(--white);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+        .arrow-btn:hover { background: var(--dark-green); }
+
+        /* ================= TESTIMONIALS SECTION ================= */
+        .testimonials {
+            padding: 100px 0;
+            background: #fafafa;
+            position: relative;
+            text-align: center;
+            overflow: hidden;
+        }
+        .map-bg {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 60%;
+            opacity: 0.05;
+            pointer-events: none;
+        }
+        .testi-content {
+            max-width: 800px;
+            margin: 0 auto;
+            position: relative;
+            z-index: 2;
+        }
+        .testi-content .section-subtitle { justify-content: center; }
+        .testi-content h2 { font-size: 42px; margin-bottom: 40px; }
+        .quote {
+            font-size: 18px;
+            line-height: 1.8;
+            font-style: italic;
+            color: var(--text-gray);
+            margin-bottom: 30px;
+        }
+        .client-name { font-weight: 700; font-size: 20px; margin-bottom: 5px; }
+        .client-role { color: var(--primary-green); font-size: 14px; }
+        .dots {
+            display: flex;
+            justify-content: center;
+            gap: 8px;
+            margin-top: 30px;
+        }
+        .dot {
+            width: 10px;
+            height: 10px;
+            background: #ddd;
+            border-radius: 50%;
+            cursor: pointer;
+        }
+        .dot.active { background: var(--primary-green); }
+        
+        /* Floating Elements */
+        .floating-imgs {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            pointer-events: none;
+        }
+        .float-item {
+            position: absolute;
+            border-radius: 15px;
+            object-fit: cover;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+        }
+        .float-1 { top: 15%; left: 10%; width: 120px; transform: rotate(-10deg); }
+        .float-2 { top: 25%; left: 20%; width: 90px; transform: rotate(5deg); }
+        .float-3 { top: 10%; right: 25%; width: 80px; transform: rotate(15deg); }
+        .float-4 { top: 20%; right: 10%; width: 130px; transform: rotate(-5deg); }
+        .float-leaf { position: absolute; width: 40px; }
+        .leaf-1 { top: 20%; left: 25%; }
+        .leaf-2 { top: 40%; right: 20%; }
+        
+        @keyframes float {
+            0% { transform: translateY(0px); }
+            50% { transform: translateY(-10px); }
+            100% { transform: translateY(0px); }
+        }
+
+        /* ================= BLOG SECTION ================= */
+        .blog {
+            padding: 100px 0;
+            background: var(--white);
+        }
+        .blog-container {
+            display: flex;
+            gap: 40px;
+        }
+        .blog-header {
+            width: 30%;
+        }
+        .blog-header h2 { font-size: 40px; margin-bottom: 30px; }
+        
+        .blog-grid {
+            width: 70%;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 30px;
+        }
+        .blog-card {
+            border-radius: 20px;
+            overflow: hidden;
+        }
+        .blog-img {
+            position: relative;
+            height: 250px;
+            border-radius: 20px;
+            overflow: hidden;
+        }
+        .blog-img img { width: 100%; height: 100%; object-fit: cover; }
+        .date-badge {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            background: var(--primary-green);
+            color: var(--white);
+            padding: 5px 15px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+        .blog-meta {
+            display: flex;
+            gap: 15px;
+            font-size: 13px;
+            color: var(--text-gray);
+            margin: 15px 0 10px;
+        }
+        .blog-meta i { color: var(--primary-green); margin-right: 5px; }
+        .blog-card h4 { font-size: 20px; margin-bottom: 15px; }
+        .read-more {
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--text-dark);
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+        }
+        .read-more:hover { color: var(--primary-green); }
+
+        /* ================= FOOTER / NEWSLETTER ================= */
+        .site-footer {
+            margin-top: 100px;
+            background: linear-gradient(rgba(10,77,31,0.9), rgba(10,77,31,0.9)), url('https://images.unsplash.com/photo-1592982537447-6f2334cb4287?q=80&w=2070&auto=format&fit=crop') no-repeat center/cover;
+            color: var(--white);
+            position: relative;
+        }
+        
+        /* Newsletter Overlapping Box */
+        .newsletter-box {
+            background: var(--primary-green);
+            padding: 40px;
+            border-radius: 20px 20px 0 0;
+            width: 350px;
+            position: absolute;
+            top: -100px; /* Pulls it up */
+            left: 100px;
+        }
+        .news-icon { font-size: 40px; margin-bottom: 20px; }
+        .newsletter-box h3 { font-size: 28px; margin-bottom: 10px; }
+        .newsletter-box p { font-size: 14px; margin-bottom: 20px; line-height: 1.5; }
+        .newsletter-box input {
+            width: 100%;
+            padding: 15px 20px;
+            border-radius: 30px;
+            border: none;
+            margin-bottom: 15px;
+            outline: none;
+        }
+        
+        /* Footer Top */
+        .footer-top {
+            display: flex;
+            justify-content: flex-end;
+            padding: 40px 100px 40px 0;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+            position: relative;
+        }
+        .footer-contacts {
+            display: flex;
+            gap: 40px;
+            margin-right: 150px;
+        }
+        .f-contact { display: flex; align-items: center; gap: 15px; }
+        .f-contact i { font-size: 24px; }
+        .f-contact p { font-size: 12px; color: #ccc; margin-bottom: 5px;}
+        .f-contact h4 { font-size: 16px; }
+        
+        .farmer-img {
+            position: absolute;
+            bottom: 0;
+            right: 50px;
+            width: 200px;
+            z-index: 2;
+        }
+
+        /* Footer Main */
+        .footer-main {
+            padding: 60px 100px 60px 500px; /* Offset for newsletter box */
+            display: grid;
+            grid-template-columns: 1fr 1fr 2fr;
+            gap: 40px;
+        }
+        .footer-col h4 {
+            font-size: 20px;
+            margin-bottom: 25px;
+        }
+        .footer-col ul li { margin-bottom: 12px; }
+        .footer-col ul li a {
+            color: #ccc;
+            font-size: 14px;
+            transition: color 0.3s;
+        }
+        .footer-col ul li a:hover { color: var(--yellow); }
+        
+        .footer-about p {
+            color: #ccc;
+            font-size: 14px;
+            line-height: 1.6;
+            margin: 20px 0;
+        }
+        .social-icons { display: flex; gap: 15px; }
+        .social-icons a { color: var(--white); font-size: 16px; transition: color 0.3s;}
+        .social-icons a:hover { color: var(--yellow); }
+
+        /* Footer Bottom */
+        .footer-bottom {
+            text-align: center;
+            padding: 20px 0;
+            border-top: 1px solid rgba(255,255,255,0.1);
+            font-size: 14px;
+            color: #ccc;
+        }
+        .footer-bottom span { color: var(--yellow); font-weight: 600; }
+
+        /* ================= RESPONSIVE DESIGN ================= */
+        @media (max-width: 1200px) {
+            .footer-main { padding-left: 450px; }
+            .services-grid { grid-template-columns: repeat(2, 1fr); }
+            .hero-text h1 { font-size: 50px; }
+        }
+
+        @media (max-width: 992px) {
+            .nav-links, .nav-right .contact-info, .nav-right .btn { display: none; }
+            .hamburger { display: block; }
+            
+            .hero-content { flex-direction: column; text-align: center; padding-top: 50px;}
+            .hero-text h1 { align-items: center; }
+            .hero-image { display: none; }
+            
+            .about-container { grid-template-columns: 1fr; }
+            .about-images { height: 400px; margin-bottom: 40px; }
+            
+            .services-wrapper { flex-direction: column; }
+            .services-header, .services-grid { width: 100%; }
+            
+            .blog-container { flex-direction: column; }
+            .blog-header, .blog-grid { width: 100%; }
+            
+            .newsletter-box { position: relative; top: 0; left: 0; width: 100%; border-radius: 0; }
+            .footer-main { padding: 40px 20px; grid-template-columns: 1fr 1fr; }
+            .footer-top { flex-direction: column; padding: 20px; align-items: flex-start;}
+            .footer-contacts { margin-right: 0; flex-direction: column; gap: 20px;}
+            .farmer-img { display: none; }
+        }
+
+        @media (max-width: 768px) {
+            .services-grid, .blog-grid { grid-template-columns: 1fr; }
+            .footer-main { grid-template-columns: 1fr; }
+            .features { flex-direction: column; }
+            .hero-text h1 { font-size: 40px; }
+            .floating-imgs { display: none; }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Sidebar Overlay -->
+    <div class="sidebar-overlay" id="sidebarOverlay"></div>
+
+    <!-- Mobile Sidebar -->
+    <div class="sidebar" id="sidebar">
+        <div class="close-btn" id="closeBtn"><i class="fas fa-times"></i></div>
+        <ul class="nav-links">
+            <li><a href="#">Home <i class="fas fa-chevron-down"></i></a></li>
+            <li><a href="#">Services <i class="fas fa-chevron-down"></i></a></li>
+            <li><a href="#">Projects</a></li>
+            <li><a href="#">Pages <i class="fas fa-chevron-down"></i></a></li>
+            <li><a href="#">Blog <i class="fas fa-chevron-down"></i></a></li>
+            <li><a href="#">Shop <i class="fas fa-chevron-down"></i></a></li>
+            <li><a href="#">Contact</a></li>
+        </ul>
+        <div class="contact-info">
+            <i class="fas fa-phone-volume icon"></i>
+            <div class="text">
+                <p>Give us a call</p>
+                <h4>+4800 45 678 900</h4>
+            </div>
+        </div>
+    </div>
+
+    <!-- Navbar -->
+    <nav class="navbar">
+        <div class="container nav-container">
+            <a href="#" class="logo">
+                <i class="fab fa-envira"></i> agrile
+            </a>
+            <ul class="nav-links">
+                <li><a href="#">Home <i class="fas fa-chevron-down"></i></a></li>
+                <li><a href="#">Services <i class="fas fa-chevron-down"></i></a></li>
+                <li><a href="#">Projects</a></li>
+                <li><a href="#">Pages <i class="fas fa-chevron-down"></i></a></li>
+                <li><a href="#">Blog <i class="fas fa-chevron-down"></i></a></li>
+                <li><a href="#">Shop <i class="fas fa-chevron-down"></i></a></li>
+                <li><a href="#">Contact</a></li>
+            </ul>
+            <div class="nav-right">
+                <div class="contact-info">
+                    <i class="fas fa-phone-volume icon"></i>
+                    <div class="text">
+                        <p>Give us a call</p>
+                        <h4>+4800 45 678 900</h4>
+                    </div>
+                </div>
+                <div class="nav-actions">
+                    <i class="fas fa-search" style="cursor:pointer;"></i>
+                    <div class="cart-icon" style="cursor:pointer;">
+                        <i class="fas fa-shopping-cart"></i>
+                        <span class="cart-badge">0</span>
+                    </div>
+                    <a href="#" class="btn btn-green">Get A Quote <i class="fas fa-arrow-right"></i></a>
+                    <i class="fas fa-bars hamburger" id="hamburgerBtn"></i>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Hero Section -->
+    <header class="hero">
+        <div class="container hero-content">
+            <div class="hero-text">
+                <h1>
+                    <i class="fab fa-envira"></i>
+                    Organic<br>Food Delivery
+                </h1>
+                <p>Discover organic, sustainable and seasonal food from our farm</p>
+                <a href="#" class="btn btn-green">Start Now <i class="fas fa-arrow-right"></i></a>
+            </div>
+            <div class="hero-image">
+                <!-- Farmer Image Placeholder -->
+                <img src="https://images.unsplash.com/photo-1595841696677-6489ff3f8cd1?q=80&w=1000&auto=format&fit=crop&bg=transparent" alt="Happy Farmer" style="mix-blend-mode: multiply; filter: contrast(1.1);">
+            </div>
+        </div>
+        <!-- Wave Divider -->
+        <div class="wave-bottom">
+            <svg data-name="Layer 1" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 120" preserveAspectRatio="none">
+                <path d="M0,0V46.29c47.79,22.2,103.59,32.17,158,28,70.36-5.37,136.33-33.31,206.8-37.5C438.64,32.43,512.34,53.67,583,72.05c69.27,18,138.3,24.88,209.4,13.08,36.15-6,69.85-17.84,104.45-29.34C989.49,25,1113-14.29,1200,52.47V0Z" opacity=".25" class="shape-fill"></path>
+                <path d="M0,0V15.81C13,36.92,27.64,56.86,47.69,72.05,99.41,111.27,165,111,224.58,91.58c31.15-10.15,60.09-26.07,89.67-39.8,40.92-19,84.73-46,130.83-49.67,36.26-2.85,70.9,9.42,98.6,31.56,31.77,25.39,62.32,62,103.63,73,40.44,10.79,81.35-6.69,119.13-24.28s75.16-39,116.92-43.05c59.73-5.85,113.28,22.88,168.9,38.84,30.2,8.66,59,6.17,87.09-7.5,22.43-10.89,48-26.93,60.65-49.24V0Z" opacity=".5" class="shape-fill"></path>
+                <path d="M0,0V5.63C149.93,59,314.09,71.32,475.83,42.57c43-7.64,84.23-20.12,127.61-26.46,59-8.63,112.48,12.24,165.56,35.4C827.93,77.22,886,95.24,951.2,90c86.53-7,172.46-45.71,248.8-84.81V0Z" class="shape-fill"></path>
+            </svg>
+        </div>
+    </header>
+
+    <!-- About Section -->
+    <section class="about">
+        <div class="container about-container">
+            <div class="about-images">
+                <img src="https://images.unsplash.com/photo-1500937386664-56d1dfef4e97?q=80&w=1470&auto=format&fit=crop" class="leaf-img-1" alt="Farm Field">
+                <img src="https://images.unsplash.com/photo-1592982537447-6f2334cb4287?q=80&w=2070&auto=format&fit=crop" class="leaf-img-2" alt="Tractor">
+                <img src="https://cdn-icons-png.flaticon.com/512/686/686051.png" class="floating-leaf" alt="Leaf">
+            </div>
+            <div class="about-text">
+                <div class="section-subtitle">
+                    <i class="fab fa-envira"></i> ABOUT AGRILE
+                </div>
+                <h2>Organic &<br>Healthy Food</h2>
+                <p>We are a vertically integrated agro-industrial holding in Agrile, a public European company that runs a socially responsible business and produces food products with a focus on global markets.</p>
+                
+                <div class="features">
+                    <div class="feature-item">
+                        <div class="feature-icon"><i class="fas fa-seedling"></i></div>
+                        <div class="feature-text">
+                            <h4>Agriculture & Foods</h4>
+                            <p>Pellentesque porttitor enim et ipsum</p>
+                        </div>
+                    </div>
+                    <div class="feature-item">
+                        <div class="feature-icon"><i class="fas fa-apple-alt"></i></div>
+                        <div class="feature-text">
+                            <h4>Vegetables & Fruits</h4>
+                            <p>Pellentesque porttitor enim et ipsum</p>
+                        </div>
+                    </div>
+                </div>
+                <p>Converting non utilized lands into productive lands. Providing agricultural livelihood for farmers and employing youth. Empowering the nation towards green and desired agriculture.</p>
+                
+                <div class="about-footer">
+                    <div class="signature">
+                        <span class="signature-font">Stephen</span>
+                        <span class="signature-text">Co. Founder</span>
+                    </div>
+                    <a href="#" class="btn btn-green">Explore More <i class="fas fa-arrow-right"></i></a>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Services Section -->
+    <section class="services">
+        <div class="container services-wrapper">
+            <div class="services-header">
+                <div class="section-subtitle">
+                    <i class="fab fa-envira"></i> OUR SERVICE
+                </div>
+                <h2>What We Provide</h2>
+                <div class="best-service-badge">
+                    <div class="badge-icon"><i class="fas fa-award"></i></div>
+                    <div class="badge-text">
+                        <h4>Best Service</h4>
+                        <p>National Best Service Awards</p>
+                        <div class="stars">
+                            <i class="fas fa-star"></i> 5/5 For The Agrile Service
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="services-grid">
+                <!-- Card 1 -->
+                <div class="service-card">
+                    <img src="https://images.unsplash.com/photo-1595841696677-6489ff3f8cd1?q=80&w=1000&auto=format&fit=crop" alt="Product Supplies">
+                    <div class="service-content">
+                        <div class="arrow-btn"><i class="fas fa-arrow-right"></i></div>
+                        <i class="fas fa-box-open service-icon"></i>
+                        <h4>Product Supplies</h4>
+                        <p>Why Choose Our Services Lorem Ipsum is simply free text used by copytyping.</p>
+                    </div>
+                </div>
+                <!-- Card 2 -->
+                <div class="service-card">
+                    <img src="https://images.unsplash.com/photo-1592982537447-6f2334cb4287?q=80&w=2070&auto=format&fit=crop" alt="Fresh Vegetables">
+                    <div class="service-content">
+                        <div class="arrow-btn"><i class="fas fa-arrow-right"></i></div>
+                        <i class="fas fa-tractor service-icon"></i>
+                        <h4>Fresh Vegetables</h4>
+                        <p>Why Choose Our Services Lorem Ipsum is simply free text used by copytyping.</p>
+                    </div>
+                </div>
+                <!-- Card 3 -->
+                <div class="service-card">
+                    <img src="https://images.unsplash.com/photo-1500937386664-56d1dfef4e97?q=80&w=1470&auto=format&fit=crop" alt="Natural Carrots">
+                    <div class="service-content">
+                        <div class="arrow-btn"><i class="fas fa-arrow-right"></i></div>
+                        <i class="fas fa-carrot service-icon"></i>
+                        <h4>Natural Carrots</h4>
+                        <p>Why Choose Our Services Lorem Ipsum is simply free text used by copytyping.</p>
+                    </div>
+                </div>
+                <!-- Card 4 -->
+                <div class="service-card">
+                    <img src="https://images.unsplash.com/photo-1518843875459-f738682238a6?q=80&w=1442&auto=format&fit=crop" alt="Vegetable Firms">
+                    <div class="service-content">
+                        <div class="arrow-btn"><i class="fas fa-arrow-right"></i></div>
+                        <i class="fas fa-leaf service-icon"></i>
+                        <h4>Vegetable Firms</h4>
+                        <p>Why Choose Our Services Lorem Ipsum is simply free text used by copytyping.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Testimonials Section -->
+    <section class="testimonials">
+        <!-- SVG Map Background Placeholder -->
+        <img src="https://upload.wikimedia.org/wikipedia/commons/8/80/World_map_-_low_resolution.svg" class="map-bg" alt="World Map">
+        
+        <div class="floating-imgs">
+            <img src="https://images.unsplash.com/photo-1464226184884-fa280b87c399?q=80&w=400&auto=format&fit=crop" class="float-item float-1" alt="Farmer">
+            <img src="https://images.unsplash.com/photo-1595841696677-6489ff3f8cd1?q=80&w=400&auto=format&fit=crop" class="float-item float-2" alt="Farmer">
+            <img src="https://images.unsplash.com/photo-1589923188900-85dae523342b?q=80&w=400&auto=format&fit=crop" class="float-item float-3" alt="Farmer">
+            <img src="https://images.unsplash.com/photo-1605000797499-95a51c5269ae?q=80&w=400&auto=format&fit=crop" class="float-item float-4" alt="Farmer">
+            <img src="https://cdn-icons-png.flaticon.com/512/686/686051.png" class="float-leaf leaf-1" alt="Leaf">
+            <img src="https://cdn-icons-png.flaticon.com/512/686/686051.png" class="float-leaf leaf-2" alt="Leaf">
+        </div>
+
+        <div class="container testi-content">
+            <div class="section-subtitle">
+                <i class="fab fa-envira"></i> OUR TESTIMONIALS
+            </div>
+            <h2>Hear What Our<br>Global Clients Say</h2>
+            <p class="quote">"Instead of asking how factory farms can prevent infections that originate in the environment, which is how they frame it now, we should be asking how they can prevent infections that originate on factory farms."</p>
+            <h4 class="client-name">Sharon Gunther</h4>
+            <span class="client-role">Fresh Design</span>
+            
+            <div class="dots">
+                <div class="dot active"></div>
+                <div class="dot"></div>
+                <div class="dot"></div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Blog Section -->
+    <section class="blog">
+        <div class="container blog-container">
+            <div class="blog-header">
+                <div class="section-subtitle">
+                    <i class="fab fa-envira"></i> OUR BLOGS
+                </div>
+                <h2>Latest News<br>From The<br>Blogs</h2>
+                <a href="#" class="btn btn-green">View All News <i class="fas fa-arrow-right"></i></a>
+            </div>
+            
+            <div class="blog-grid">
+                <!-- Blog 1 -->
+                <div class="blog-card">
+                    <div class="blog-img">
+                        <span class="date-badge">NOV. 5, 2024</span>
+                        <img src="https://images.unsplash.com/photo-1589923188900-85dae523342b?q=80&w=800&auto=format&fit=crop" alt="Blog 1">
+                    </div>
+                    <div class="blog-meta">
+                        <span><i class="fas fa-user"></i> Admin</span>
+                        <span><i class="fas fa-comments"></i> 0 Comments</span>
+                    </div>
+                    <h4>Attack Surface Management: Mitigating...</h4>
+                    <a href="#" class="read-more">Read More <i class="fas fa-arrow-right"></i></a>
+                </div>
+                <!-- Blog 2 -->
+                <div class="blog-card">
+                    <div class="blog-img">
+                        <span class="date-badge">NOV. 5, 2024</span>
+                        <img src="https://images.unsplash.com/photo-1598170845058-32b9d6a5da37?q=80&w=800&auto=format&fit=crop" alt="Blog 2">
+                    </div>
+                    <div class="blog-meta">
+                        <span><i class="fas fa-user"></i> Admin</span>
+                        <span><i class="fas fa-comments"></i> 0 Comments</span>
+                    </div>
+                    <h4>Wheat Harvest Organic Gather nice Moment</h4>
+                    <a href="#" class="read-more">Read More <i class="fas fa-arrow-right"></i></a>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="site-footer">
+        
+        <div class="container">
+            <!-- Newsletter overlapping box -->
+            <div class="newsletter-box">
+                <i class="far fa-envelope-open news-icon"></i>
+                <h3>Sign Up To Our Newsletters</h3>
+                <p>Subscribe to our Newsletter & Event right now to be updated</p>
+                <form action="#">
+                    <input type="email" placeholder="Email address*" required>
+                    <button type="submit" class="btn btn-yellow">Subscribe <i class="fas fa-arrow-right"></i></button>
+                </form>
+            </div>
+            
+            <div class="footer-top">
+                <div class="footer-contacts">
+                    <div class="f-contact">
+                        <i class="far fa-paper-plane"></i>
+                        <div>
+                            <p>General enquiries</p>
+                            <h4>support@example.com</h4>
+                        </div>
+                    </div>
+                    <div class="f-contact">
+                        <i class="fas fa-headphones-alt"></i>
+                        <div>
+                            <p>Give us a call</p>
+                            <h4>+4800 45 678 900</h4>
+                        </div>
+                    </div>
+                </div>
+                <!-- Farmer Image -->
+                <img src="https://images.unsplash.com/photo-1595841696677-6489ff3f8cd1?q=80&w=400&auto=format&fit=crop&bg=transparent" class="farmer-img" alt="Farmer" style="mix-blend-mode: screen; filter: contrast(1.2);">
+            </div>
+            
+            <div class="footer-main">
+                <div class="footer-col">
+                    <h4>Useful Links</h4>
+                    <ul>
+                        <li><a href="#">About Us</a></li>
+                        <li><a href="#">Why Choose Us</a></li>
+                        <li><a href="#">Meet Our Team</a></li>
+                        <li><a href="#">Contact Us</a></li>
+                        <li><a href="#">FAQs</a></li>
+                    </ul>
+                </div>
+                <div class="footer-col">
+                    <h4>Explore</h4>
+                    <ul>
+                        <li><a href="#">What We Offer</a></li>
+                        <li><a href="#">Latest News</a></li>
+                        <li><a href="#">Project</a></li>
+                        <li><a href="#">Terms & Condition</a></li>
+                        <li><a href="#">Privacy Policy</a></li>
+                    </ul>
+                </div>
+                <div class="footer-col footer-about">
+                    <a href="#" class="logo">
+                        <i class="fab fa-envira"></i> agrile
+                    </a>
+                    <p>We carry out our mission based on the values of impeccable business reputation, social responsibility, respect for human dignity and synergetic and result-oriented partnerships.</p>
+                    <div class="social-icons">
+                        <a href="#"><i class="fab fa-facebook-f"></i></a>
+                        <a href="#"><i class="fab fa-twitter"></i></a>
+                        <a href="#"><i class="fab fa-linkedin-in"></i></a>
+                        <a href="#"><i class="fab fa-instagram"></i></a>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="footer-bottom">
+                <p>&copy; 2026 <span>Agrile</span>, Designed by <span>Themelexus</span></p>
+            </div>
+        </div>
+    </footer>
+
+    <!-- JavaScript for Mobile Sidebar -->
+    <script>
+        const hamburgerBtn = document.getElementById('hamburgerBtn');
+        const closeBtn = document.getElementById('closeBtn');
+        const sidebar = document.getElementById('sidebar');
+        const overlay = document.getElementById('sidebarOverlay');
+
+        function toggleSidebar() {
+            sidebar.classList.toggle('active');
+            overlay.classList.toggle('active');
+        }
+
+        hamburgerBtn.addEventListener('click', toggleSidebar);
+        closeBtn.addEventListener('click', toggleSidebar);
+        overlay.addEventListener('click', toggleSidebar);
+    </script>
+</body>
+</html>

@@ -1,0 +1,432 @@
+ASWAMITHRA
+Farmer-to-Customer & B2B Marketplace Platform
+Complete Project Specification & Application Flow Document
+Version 1.0  |  July 2026
+Prepared for: Project Owner & Development Team
+
+Table of Contents
+
+
+
+1. Project Overview
+Aswamithra is a location-based online marketplace — similar in speed and convenience to Zepto — that directly connects farmers with nearby customers and bulk (B2B) buyers. Customers open the app or website, set their location and a search radius, and instantly see all verified farmers and their products (rice, vegetables, grains, etc.) available around them. Farmers list their own products, set their own prices and units, and receive payments directly to their bank accounts. The platform earns through a small, admin-controlled commission on every transaction.
+1.1 Goals
+	•	Remove middlemen so farmers earn more and customers pay less.
+	•	Give every farmer a simple digital shop with full control over prices, stock, and units (kg, grams, units, tons, quintal).
+	•	Show customers exactly how much money they saved versus market price, and show farmers exactly how much extra they earned by selling through Aswamithra.
+	•	Give the Admin team full control: commission rates, shop creation by location, farmer verification, billing, banners, and analytics across India.
+	•	Support three separate login types — Customer, Farmer, B2B — plus a secure Admin panel.
+1.2 Key Differentiators
+	•	Radius-based discovery: buy from farmers within 5 / 10 / 25 km of your location (powered by Mapbox + PostGIS).
+	•	Dynamic commission engine: e.g., 4.5% on transactions up to Rs. 10,000 and 4% above — fully editable by Admin without code changes.
+	•	Transparency dashboards: "You saved Rs. X" for customers, "You earned Rs. X via Aswamithra" for farmers.
+	•	Admin-created shops location-wise across India, with a proper billing and invoicing system.
+
+2. User Roles & Access
+The platform has four distinct roles, each with a separate login and its own panel. One phone number = one account per role.
+Role
+Who they are
+What they can do
+Customer
+End consumers buying for home use
+Browse farmers by radius, buy products, track orders, rate farmers, view savings dashboard
+Farmer
+Verified farmers selling produce
+List products, set price & unit, manage stock, accept/reject orders, view earnings & payouts
+B2B Buyer
+Shops, hotels, mills, wholesalers
+Bulk orders in quintal/ton, GST invoices, quote requests, credit ledger, delivery scheduling
+Admin Team
+Aswamithra staff
+Verify KYC, control commission slabs, create shops location-wise, billing system, banners, analytics, refunds, social media links
+
+2.1 Access Rules
+	•	Customer accounts are active immediately after OTP verification.
+	•	Farmer and B2B accounts stay in "Pending Verification" until Admin approves their KYC documents.
+	•	Admin panel runs on a separate, secure URL (e.g., admin.aswamithra.in) with role-based permissions (Super Admin, Ops, Finance, Support).
+
+3. Technology Stack (Best Open Source)
+Every tool below is open source or has a permanent free tier, and everything runs on the VPS you already purchased. Nothing here creates vendor lock-in.
+Layer
+Technology
+Why this choice
+Web frontend
+Next.js (React)
+Fast, SEO-friendly, single codebase for the website; free & open source
+Mobile app (Phase 2)
+React Native (Expo)
+Reuses the same React skills and API; one team builds web + app
+Backend API
+Node.js + NestJS
+Structured, modular framework; easy to add roles, payments, geo APIs
+Database
+PostgreSQL + PostGIS
+The best open-source database for "farmers within X km" radius queries; free forever
+Auth / OTP / Storage
+Supabase (self-hosted)
+Open-source; gives phone OTP, Gmail login, and file storage on your own VPS
+Maps
+Mapbox
+Already in use; location pins, radius circles, distance calculation
+Cache & queues
+Redis
+Sessions, live cart, OTP rate-limiting, background jobs
+Payments
+Razorpay + Route
+UPI/cards/netbanking for India; Route auto-splits farmer share vs. platform commission
+SMS OTP (India)
+MSG91 or Fast2SMS
+Cheap, reliable Indian OTP delivery (used via Supabase auth hook)
+Push notifications
+Firebase FCM
+Free & unlimited push to app/web; only Firebase piece used now
+WhatsApp alerts
+WhatsApp Business API (Interakt/Gupshup)
+Farmers respond to WhatsApp far more than app notifications
+Admin dashboard
+Refine or React-Admin
+Open-source admin frameworks; build panels in days, not months
+Server & deploy
+Docker + Nginx + Let’s Encrypt
+Containerised deploy on your VPS with free SSL certificates
+
+3.1 Why PostgreSQL and not Firebase as the main database
+	•	Your core feature is a geographic radius search. PostGIS answers "all farmers within 10 km, sorted by distance" in one fast query; Firestore needs geohash workarounds.
+	•	PostgreSQL is 100% free on your VPS. Firestore charges per read/write and marketplace browsing generates huge read volumes.
+	•	Future plan stays intact: the same PostgreSQL later moves to Google Cloud SQL, and Firebase is used only for FCM push, Crashlytics, and Analytics (its genuinely best parts).
+
+4. Registration & Onboarding (Step by Step)
+4.1 Common First Steps (all roles)
+	•	Visitor opens the website/app and sees the welcome screen with hovering banner images and a "Join as: Customer / Farmer / B2B" choice.
+	•	User enters their mobile number. Backend sends a 6-digit OTP (via MSG91 through Supabase Auth). OTP expires in 5 minutes; maximum 3 resends; rate-limited by Redis to stop abuse.
+	•	User enters OTP. On success, a verified account shell is created with the chosen role.
+	•	Optionally the user can also link Gmail (Google Sign-In) for one-tap future logins. Email is verified via Google, so no separate email OTP is needed.
+	•	User sets a 4-digit app PIN or password as a second login method.
+
+4.2 Customer Registration Details
+	•	Full name, mobile (verified), email (optional Gmail link).
+	•	Delivery address: house/street, landmark, pincode, city, state.
+	•	Location pin on Mapbox (auto-detect GPS with manual adjust) — stored as latitude/longitude for radius search.
+	•	Preferred language (Telugu / Hindi / English).
+Customer account becomes active immediately and lands on the home screen.
+4.3 Farmer Registration Details
+	•	Full name, mobile (verified), email (optional), profile photo.
+	•	Farm location pin on Mapbox + village, mandal/taluk, district, state, pincode.
+	•	KYC: Aadhaar number + Aadhaar photo upload; optional PAN.
+	•	Bank details for payouts: account holder name, account number, IFSC (verified later with a Rs. 1 penny-drop via Razorpay).
+	•	Crops/products grown, approximate land size, farm photos (builds customer trust).
+Status = Pending. Admin reviews KYC in the Admin panel and Approves or Rejects (with reason). Farmer gets SMS + WhatsApp on approval and can then list products.
+4.4 B2B Registration Details
+	•	Business name, owner name, mobile (verified), business email.
+	•	GSTIN (validated format), business type (retailer / hotel / mill / wholesaler).
+	•	Business address + location pin, trade license or shop registration upload.
+	•	Optional: expected monthly purchase volume (helps Admin offer credit terms).
+Status = Pending until Admin verifies GSTIN and documents. After approval, B2B catalog with bulk pricing unlocks.
+4.5 Login Methods (all roles)
+	•	Mobile + OTP (primary).
+	•	Gmail one-tap (if linked).
+	•	Mobile + PIN/password (fallback).
+	•	Session tokens (JWT) with refresh; auto-logout of Admin sessions after 30 minutes of inactivity.
+
+5. Customer Panel — Complete Flow
+5.1 Home Screen
+	•	Personalised welcome note ("Good morning, Ravi!") and hovering/carousel banner images managed by Admin.
+	•	Location bar showing current delivery location with a radius selector: 5 km / 10 km / 25 km / custom.
+	•	Category tiles: Rice & Grains, Vegetables, Fruits, Pulses, Dairy, Others.
+	•	Footer on every page: all official social media links (Facebook, Instagram, YouTube, X, WhatsApp channel) and an India map/list of active locations — both managed from the Admin panel.
+5.2 Discovery (the core feature)
+	•	Customer sets/confirms location (GPS or manual pin on Mapbox).
+	•	Backend runs a PostGIS query: find all approved farmers whose farm point lies within the chosen radius, with in-stock products, sorted by distance.
+	•	Results screen shows farmer cards: photo, name, village, distance (e.g., "3.2 km away"), rating, and their product list.
+	•	Customer can also search by product ("rice bag") — results show every farmer in radius selling rice, with price per unit for comparison.
+
+5.3 Product Page
+	•	Product photos, name, description, price, and unit exactly as the farmer set them (Rs./kg, Rs./quintal, Rs./unit, etc.).
+	•	Market reference price (maintained by Admin per product-category-region) shown with a strike-through, so the saving is visible before buying.
+	•	Farmer mini-profile: photo, farm photos, rating, total orders served, distance.
+	•	Quantity selector respecting the farmer’s minimum order quantity and live stock.
+5.4 Cart & Checkout
+	•	Add to cart (multiple farmers allowed; cart groups items per farmer since each farmer fulfils separately).
+	•	Checkout: confirm address, choose delivery slot, apply coupon (if Admin has published any).
+	•	Payment via Razorpay: UPI / card / netbanking / wallets, or Cash on Delivery if Admin has enabled COD for that region.
+	•	Order confirmation screen + SMS/WhatsApp/push with order ID.
+
+5.5 Order Tracking & After-Sales
+	•	Live status: Placed → Farmer Accepted → Packed → Out for Delivery → Delivered.
+	•	After delivery: rate the farmer (1–5 stars + comment) and report issues (opens a dispute the Admin team handles).
+	•	Reorder in one tap from order history.
+5.6 Customer Savings Dashboard
+For every delivered order the system stores (market reference price − price paid) × quantity into a savings ledger. The dashboard shows:
+	•	"You saved Rs. 1,240 this month by buying directly from farmers."
+	•	Lifetime savings, monthly graph, and savings per order in the invoice.
+
+6. Farmer Panel — Complete Flow
+6.1 Dashboard
+	•	Welcome note with today’s summary: new orders, pending deliveries, today’s earnings.
+	•	Headline card: "You earned Rs. X extra by selling through Aswamithra" — calculated as (Aswamithra sale price − local mandi reference price) × quantity, accumulated in an earnings ledger.
+	•	Low-stock alerts and rating summary.
+6.2 Product Management
+	•	Add Product: name, category, photos, description.
+	•	Set price and choose unit from: Kg, Grams, Units (pieces), Tons, Quintal. The farmer fully controls the price.
+	•	Set available stock, minimum order quantity, and optional bulk price tiers for B2B (e.g., cheaper per quintal).
+	•	Publish — the product instantly appears to all customers whose radius covers this farm.
+	•	Edit price/stock anytime; pause a product with one tap (e.g., sold out at the farm).
+
+6.3 Order Handling
+	•	New order alert arrives by push notification + WhatsApp + SMS.
+	•	Farmer opens the order: items, quantity, customer area, payout amount after commission clearly shown.
+	•	Accept or Reject within a time window (e.g., 30 minutes; auto-cancel with refund if no response).
+	•	Mark as Packed → handover to delivery (own delivery / platform partner / pickup point, per the region’s delivery model).
+	•	On Delivered: payment auto-settles.
+
+6.4 Payments & Payouts
+	•	Online orders: Razorpay Route automatically splits every payment — farmer’s share goes to the farmer’s linked bank account, commission goes to the platform account. No manual settlement.
+	•	COD orders: delivery partner collects; platform settles the farmer’s share in the next payout cycle (T+2).
+	•	Payout statement screen: every order, gross amount, commission %, commission amount, net credited, UTR number, date.
+6.5 Earnings Dashboard
+	•	"Earned via Aswamithra: Rs. X" (extra earnings vs. mandi reference price).
+	•	Total sales, orders completed, best-selling products, monthly trend graph.
+	•	Downloadable monthly statement (PDF) for the farmer’s records.
+
+7. B2B Panel — Complete Flow
+7.1 Catalog & Ordering
+	•	Bulk catalog with quintal/ton pricing tiers set by farmers (or negotiated via quotes).
+	•	Two paths: (a) Direct bulk order at listed tier price, or (b) Request For Quote — B2B sends required quantity, nearby farmers (or Admin on their behalf) respond with an offer, B2B accepts.
+	•	Minimum order values and delivery scheduling (choose a delivery date; bulk needs planning).
+7.2 Payments, Invoicing & Credit
+	•	Payment options: full advance, partial advance + balance on delivery, or credit terms (only if Admin has approved a credit limit for that B2B account).
+	•	Automatic GST invoice generated for every order (GSTIN of both parties, HSN codes, tax breakup) — legally required for B2B trade.
+	•	Credit ledger: outstanding amount, due dates, payment history, auto-reminders on WhatsApp/email.
+7.3 B2B Dashboard
+	•	Purchase history, GST reports (monthly, downloadable for filing), savings vs. wholesale market rate, repeat-order shortcuts.
+
+8. Admin Panel — Complete Flow
+8.1 Access & Roles
+	•	Separate secure URL with mandatory 2-factor login (password + OTP).
+	•	Sub-roles: Super Admin (everything), Operations (KYC, shops, orders), Finance (commissions, payouts, refunds), Support (disputes, customers).
+	•	Every admin action is written to an audit log (who, what, when).
+8.2 Verification (KYC) Queue
+	•	Open pending Farmer/B2B applications; view uploaded Aadhaar/GSTIN/licenses side by side with entered details.
+	•	Approve, Reject (with reason sent by SMS/WhatsApp), or Request re-upload.
+	•	Bank account check: trigger Rs. 1 penny-drop verification through Razorpay before enabling payouts.
+
+8.3 Commission Control (Dynamic Pricing Engine)
+Commission slabs live in a database table the Admin edits from a simple screen — no developer needed:
+Min Amount (Rs.)
+Max Amount (Rs.)
+Commission %
+Applies To
+0
+10,000
+4.5%
+All transactions
+10,001
+No limit
+4.0%
+All transactions
+
+	•	Admin can add more slabs, set different rates per category or per region, and schedule changes (e.g., festival offer: 3% for one week).
+	•	Every change is versioned: old orders always keep the rate that applied when they were placed.
+	•	At payment time the backend reads the current slab and instructs Razorpay Route to split accordingly.
+8.4 Shops (Location-wise) Management
+	•	Admin can create a "Shop" for any location in India: shop name, address, Mapbox pin, service radius, operating hours, assigned staff.
+	•	A shop can stock its own products (procured from farmers) — Admin adds products, prices, and stock to the shop just like a farmer does.
+	•	Customers in that shop’s radius see the shop alongside individual farmers.
+	•	India map view: all active shops and farmer density per district, so Admin can plan expansion.
+8.5 Billing System
+	•	Automatic invoice for every order (customer invoice, farmer settlement note, B2B GST invoice).
+	•	Manual billing screen at shops (POS-style): staff selects products, quantity, applies price, takes payment (UPI QR / cash), invoice prints or is sent by WhatsApp.
+	•	Finance reports: daily sales, commission earned, pending payouts, refunds, GST summary — all exportable to Excel.
+8.6 Content & Marketing Controls
+	•	Banner manager: upload hovering/carousel images, welcome notes, set start/end dates, target audience (customers or farmers).
+	•	Social media link manager: add/edit Facebook, Instagram, YouTube, X, WhatsApp links shown in the footer of the website and app.
+	•	Locations page manager: mark active districts/cities across India.
+	•	Coupon engine: create discount codes with limits.
+8.7 Disputes & Refunds
+	•	Dispute queue from customer complaints; Admin can issue full/partial refund via Razorpay, penalise repeat-offending sellers, or reject with explanation.
+
+9. Order Lifecycle & Notifications
+Status
+Triggered by
+Customer notified
+Farmer notified
+PLACED
+Customer pays / confirms COD
+Order confirmation
+New order alert
+ACCEPTED
+Farmer accepts
+Farmer accepted your order
+—
+PACKED
+Farmer marks packed
+Order packed
+—
+OUT FOR DELIVERY
+Delivery starts
+On the way + tracking
+Handover confirmed
+DELIVERED
+Delivery confirmed (OTP at doorstep)
+Delivered + rate farmer + savings added
+Payout initiated
+CANCELLED / REFUND
+Timeout, rejection, or dispute
+Refund status
+Order cancelled
+
+	•	Every status change fires: push (FCM) + WhatsApp + SMS fallback, in the user’s chosen language.
+	•	Doorstep delivery OTP: the delivery is marked complete only when the customer’s 4-digit OTP is entered — prevents fake deliveries.
+
+10. Database Design (PostgreSQL + PostGIS)
+Core tables and their purpose. All location columns use the PostGIS geography(Point) type so radius queries are fast and accurate.
+Table
+Key columns
+Purpose
+users
+id, role, mobile, email, password_hash, language, status
+One row per account; role = customer / farmer / b2b / admin
+customer_profiles
+user_id, name, address, pincode, location(Point)
+Delivery address & map pin
+farmer_profiles
+user_id, name, village, district, location(Point), aadhaar_ref, bank_account, ifsc, kyc_status
+Farmer identity, farm pin, payout account
+b2b_profiles
+user_id, business_name, gstin, license_doc, credit_limit, kyc_status
+Business identity & credit
+products
+id, seller_id, seller_type(farmer/shop), name, category, price, unit(kg/g/unit/ton/quintal), stock, min_qty, status
+Every sellable item
+market_prices
+category, region, reference_price, unit, updated_by
+Reference prices for savings/earnings calculations
+orders
+id, buyer_id, buyer_type, seller_id, status, total, commission_rate, commission_amt, payment_mode
+One order per farmer per checkout
+order_items
+order_id, product_id, qty, unit, price_at_order
+Line items (price frozen at order time)
+commission_slabs
+min_amount, max_amount, rate, category, region, valid_from, valid_to
+Admin-editable dynamic commission
+payments
+order_id, razorpay_id, amount, split_farmer, split_platform, status
+Payment + Route split record
+payouts
+farmer_id, order_id, amount, utr, status, settled_at
+Money credited to farmers
+savings_ledger
+customer_id, order_id, market_value, paid_value, saved_amount
+Powers "You saved Rs. X"
+earnings_ledger
+farmer_id, order_id, mandi_value, sold_value, extra_earned
+Powers "Earned Rs. X via Aswamithra"
+shops
+id, name, location(Point), radius_km, hours, staff_ids, status
+Admin-created location-wise shops
+banners
+image_url, title, audience, start_date, end_date, sort
+Welcome notes & hovering images
+social_links
+platform, url, visible
+Footer social media links
+service_locations
+state, district, city, status
+Active locations across India
+reviews
+order_id, rating, comment
+Farmer ratings
+disputes
+order_id, reason, status, resolution
+Complaints & refunds
+notifications
+user_id, channel, message, status
+Delivery log of alerts
+audit_logs
+admin_id, action, entity, before, after, at
+Every admin change recorded
+
+10.1 The Radius Query (heart of the app)
+SELECT f.*, ST_Distance(f.location, :customer_point) AS dist
+FROM farmer_profiles f
+WHERE f.kyc_status = 'approved'
+  AND ST_DWithin(f.location, :customer_point, :radius_meters)
+ORDER BY dist;
+With a GIST index on location, this answers in milliseconds even with lakhs of farmers.
+
+11. Payment & Commission Flow (End to End)
+	•	Customer pays Rs. 12,000 for a rice order via Razorpay.
+	•	Backend looks up commission_slabs: amount is above Rs. 10,000 → rate = 4.0% → commission = Rs. 480.
+	•	Razorpay Route splits instantly: Rs. 11,520 routed to the farmer’s linked account, Rs. 480 to the platform account.
+	•	payments table stores both splits; farmer’s payout statement and Admin’s finance report update automatically.
+	•	savings_ledger and earnings_ledger entries are created from the market reference price, updating both dashboards.
+
+	•	Refunds reverse both splits proportionally through Razorpay.
+	•	COD: commission is deducted from the next payout cycle instead.
+	•	All rates, slabs, and even per-region overrides are Admin-editable at any time; historical orders keep their original rate.
+
+12. Security & Data Protection
+	•	OTP: 5-minute expiry, max 3 attempts, Redis rate-limiting per number and per IP.
+	•	Passwords/PINs hashed with bcrypt; JWT access tokens (15 min) + refresh tokens; Admin sessions expire after 30 minutes idle.
+	•	HTTPS everywhere (Let’s Encrypt); Aadhaar/bank documents stored encrypted in Supabase storage with access only via signed URLs.
+	•	Role-based API guards: a farmer token can never call customer or admin endpoints.
+	•	Daily automatic PostgreSQL backups to off-server storage; 30-day retention.
+	•	Audit log of every admin action; payment webhooks verified with Razorpay signatures.
+	•	Compliance note: store only masked Aadhaar (last 4 digits) in the database; full document only as an encrypted file, per Indian data-protection norms.
+
+13. Deployment on Your VPS
+Everything runs as Docker containers behind Nginx on the VPS you already purchased:
+nginx (SSL, Let’s Encrypt)
+  ├─ nextjs-web        (customer/farmer/b2b website)
+  ├─ nestjs-api        (all backend APIs)
+  ├─ admin-panel       (Refine/React-Admin build)
+  ├─ supabase          (auth, OTP, file storage — self-hosted)
+  ├─ postgresql+postgis (main database)
+  └─ redis             (cache, rate limits, queues)
+
+	•	One docker-compose file starts the whole platform; updates deploy with zero downtime.
+	•	Daily cron: database backup + upload to external storage.
+	•	Monitoring: Uptime Kuma (open source) for alerts if anything goes down.
+13.1 Future Move to Firebase/Google Cloud (Your Plan)
+	•	Phase now: everything on VPS as above. Add Firebase FCM immediately (free) for push notifications.
+	•	Phase scale: lift the same PostgreSQL to Google Cloud SQL, containers to Cloud Run; keep Firebase for FCM, Crashlytics, Analytics. No rewrite — because all database access sits behind a repository layer in the code (instruct your developer to enforce this from day one).
+
+14. Build Roadmap (Recommended Order)
+Phase
+Duration (approx.)
+Deliverables
+Phase 1 — Foundation
+3–4 weeks
+VPS setup, database schema, OTP + Gmail registration for all roles, KYC upload, Admin verification queue
+Phase 2 — Core Marketplace
+4–5 weeks
+Farmer product listing (price + all units), customer radius browsing on Mapbox, product & farmer pages, cart
+Phase 3 — Money
+3–4 weeks
+Razorpay + Route split, commission slab engine, order lifecycle, invoices, farmer payout statements
+Phase 4 — Dashboards & Content
+2–3 weeks
+Savings & earnings ledgers + dashboards, banners/welcome notes, social links, locations page, notifications (FCM + WhatsApp)
+Phase 5 — Admin Depth
+3 weeks
+Shops location-wise, POS billing, finance reports, disputes/refunds, coupons, analytics
+Phase 6 — B2B
+3 weeks
+B2B catalog, quotes, GST invoicing, credit ledger, delivery scheduling
+Phase 7 — Mobile App
+4–6 weeks
+React Native app reusing all APIs; Play Store launch
+
+Launch advice: go live with Phases 1–4 in ONE district first (e.g., around Vijayawada), prove that farmers list and customers buy, then expand district by district using the Admin locations manager.
+
+15. Important Items You Should Not Miss
+	•	Delivery model decision (most critical): farmer self-delivery, hired delivery partners per district, or customer pickup points. Zepto-style speed needs local delivery capacity — plan this before launch.
+	•	Multi-language UI (Telugu / Hindi / English) — essential for farmer adoption.
+	•	Farmer training: a simple WhatsApp video guide on adding products and accepting orders.
+	•	Weight/quality verification step for B2B bulk orders (photo/weighbridge slip upload at dispatch).
+	•	Legal: platform Terms & Conditions, privacy policy, refund policy, GST registration for the platform itself, and FSSAI if you handle food storage in your own shops.
+	•	Customer support channel: WhatsApp support number + in-app help, managed from the Admin Support role.
+	•	Seasonal price volatility: allow Admin to update market reference prices weekly so savings/earnings numbers stay honest.
+
+End of Document — Aswamithra Project Specification v1.0

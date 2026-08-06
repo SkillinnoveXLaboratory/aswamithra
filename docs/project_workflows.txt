@@ -1,0 +1,94 @@
+Tech Stack (all open source / free)
+LayerToolWhyFrontend (web)Next.js (React)Fast, SEO-friendly, one codebaseMobile app (later)React Native / ExpoReuses your React skillsBackend APINode.js + NestJSStructured, scalableDatabasePostgreSQL + PostGISRadius search, on your VPSAuth + OTP + StorageSupabase (self-hosted)Phone OTP, Gmail login, file storageMapsMapboxYou already use itCacheRedisFast sessions, live cart, rate limitingPaymentsRazorpay RouteAuto split: farmer share + your commissionNotificationsFCM (free) + WhatsApp APIOrder alertsAdmin dashboardReact-Admin / Refine (open source)Ready-made admin panelsServerNginx + Docker on your VPSEasy deploy, SSL free via Let's Encrypt
+1. Registration Flow (all user types)
+Visitor → Choose role: Customer / Farmer / B2B
+  → Enter mobile → OTP verify (Supabase Auth)
+  → Optional Gmail sign-in
+  → Role-specific details:
+      Customer: name, address (Mapbox pin), pincode
+      Farmer:   name, farm location pin, Aadhaar/KYC,
+                bank account (for payouts), crops grown, photo
+      B2B:      business name, GSTIN, address, license upload
+  → Farmer & B2B go to "Pending" → Admin verifies KYC → Approved
+  → Customer is active immediately
+2. Customer Buying Flow
+Login → Home (welcome banner, hovering images, offers)
+  → Location auto-detect or pin on Mapbox
+  → Set radius (5/10/25 km)
+  → PostGIS query returns farmers + products in radius
+  → Product page: price, unit (kg/g/unit/ton/quintal),
+    farmer profile, distance, ratings
+  → Add to cart → Checkout
+  → Pay via Razorpay (UPI/card/COD option)
+  → Order confirmed → live status tracking
+  → After delivery: rate farmer
+  → Dashboard shows "You saved ₹X vs market rate"
+3. Farmer Selling Flow
+Login → Farmer dashboard
+  → Add product: name, photo, price, unit, stock, category
+  → Product goes live in their radius
+  → New order alert (FCM + WhatsApp)
+  → Accept / Reject order
+  → Pack → mark ready → delivery
+  → Razorpay Route auto-credits farmer's bank
+    (order amount minus platform commission)
+  → Dashboard: "Earned ₹X via Aswamithra",
+    orders history, payout statements, stock alerts
+4. B2B Flow
+Login → B2B catalog (bulk pricing: quintal/ton tiers)
+  → Request quote or order directly
+  → GST invoice auto-generated
+  → Payment: full / partial advance
+  → Delivery scheduling for bulk
+  → Dashboard: purchase history, GST reports, credit ledger
+5. Commission Engine (Admin-controlled)
+commission_slabs table:
+  min_amount | max_amount | rate%
+  0          | 10,000     | 4.5
+  10,001     | ∞          | 4.0
+
+On payment → backend reads slab → Razorpay Route splits:
+  Farmer share → farmer bank account
+  Commission  → your platform account
+Admin can edit slabs anytime from panel — no code change
+6. Admin Panel Flow
+Admin login (separate secure URL, role-based access)
+  → Verify/approve farmers & B2B (KYC review)
+  → Open shops location-wise, assign products
+  → Adjust commission slabs
+  → Manage banners, welcome notes, hover images
+  → Billing system: invoices, settlement reports
+  → India map view: active locations, farmer density
+  → Analytics: sales, top products, savings/earnings totals
+  → Manage social media links shown in footer
+  → Handle refunds & disputes
+7. Order Status Lifecycle
+PLACED → FARMER_ACCEPTED → PACKED → OUT_FOR_DELIVERY
+       → DELIVERED → (optional) RETURN/REFUND
+Each step triggers FCM + WhatsApp notification to both sides
+8. Core Database Tables
+users (role: customer/farmer/b2b/admin) · farmer_profiles (KYC, bank, geo-point) · products (price, unit, stock) · orders + order_items · commission_slabs · payments + payouts · shops (admin-created, location-wise) · savings_ledger (customer saved ₹) · earnings_ledger (farmer earned ₹) · banners, social_links, reviews, notifications
+9. Deployment on Your VPS
+Docker containers:
+  nginx (SSL) → next.js frontend → nestjs API
+  → postgresql+postgis → redis → supabase (auth/storage)
+Daily automatic DB backup → object storage
+Later: same containers lift to Google Cloud, zero rewrite
+Build order I recommend: Registration + OTP → Farmer product listing → Customer radius browsing → Cart + Razorpay → Commission engine → Dashboards (earned/saved) → Admin panel → B2B → mobile app.
+If you want, next I can give you the exact database schema (SQL) for these tables so your developer can start immediately.full clear document for each step and explain everythingSelecting Word format for formal project deliverableSelecting Word format for formal project deliverableI'll create a complete project document for you. Let me build it properly.Deliberating between docx and markdown formatsDeliberating between docx and markdown formatsI'll create a complete project specification document (Word file) that you can share directly with your developers.Architected modular script with organized helper functionsArchitected modular script with organized helper functionsThe document renders cleanly. Here's your complete specification:Presented filePresented fileYour complete Aswamithra Project Specification (20 pages) is ready. It covers every step in detail:
+
+Project Overview — goals and what makes you different
+User Roles & Access — Customer, Farmer, B2B, Admin rules
+Tech Stack — best open-source choice for every layer, with reasons (including why PostgreSQL over Firebase)
+Registration & Onboarding — step-by-step OTP, Gmail, KYC details for all three user types
+Customer Panel — welcome banners, radius browsing, cart, checkout, savings dashboard
+Farmer Panel — product listing with all units, order handling, payouts, earnings dashboard
+B2B Panel — bulk orders, quotes, GST invoices, credit ledger
+Admin Panel — KYC queue, commission slab control (4.5%/4%), location-wise shops, billing system, banners, social links
+Order Lifecycle & Notifications — status table with who gets alerted when
+Database Design — all 21 tables with columns, plus the actual PostGIS radius query
+Payment & Commission Flow — worked example with Razorpay Route split
+Security — OTP limits, encryption, Aadhaar handling, backups
+VPS Deployment — Docker layout + your future Firebase/Google Cloud path
+Build Roadmap — 7 phases with timelines
+Don't-Miss Checklist —
