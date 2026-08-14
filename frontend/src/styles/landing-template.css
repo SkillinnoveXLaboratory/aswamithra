@@ -559,7 +559,14 @@
 .landing-footer-contacts {
   display: flex;
   gap: 40px;
-  margin-right: 150px;
+  margin-right: 40px;
+}
+
+.landing-footer-map {
+  min-width: 240px;
+  max-width: 280px;
+  flex-shrink: 0;
+  margin-right: 120px;
 }
 
 .landing-f-contact {
@@ -681,6 +688,28 @@
   .landing-footer-top { flex-direction: column; padding: 20px; align-items: flex-start; }
   .landing-footer-contacts { margin-right: 0; flex-direction: column; gap: 20px; }
   .landing-farmer-img { display: none; }
+}
+
+.landing-footer-map {
+  width: 100%;
+  margin-top: 16px;
+}
+
+.landing-map-address {
+  margin-top: 8px;
+  font-size: 12px;
+  color: #475569;
+}
+
+.landing-map-placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 240px;
+  background: #f1f5f9;
+  color: #94a3b8;
+  font-size: 14px;
+  border-radius: 8px;
 }
 
 @media (max-width: 768px) {

@@ -10,6 +10,7 @@ import StateBlock from '../components/StateBlock.jsx';
 import { useApi } from '../hooks/useApi.js';
 import { api, endpoints, unwrap } from '../services/api.js';
 import { money } from '../utils/format.js';
+import { resolveMediaUrl } from '../utils/media.js';
 import { useAuth } from '../context/AuthContext.jsx';
 import { Edit2, Trash2, X } from 'lucide-react';
 
@@ -174,7 +175,22 @@ function FarmerProducts() {
           <StateBlock title="Create your shop first" message="Go to My Shop and create your shop before adding products." />
         ) : null}
         <DataTable compact rows={shopProducts} columns={[
-          { key: 'name', label: 'Product' }, { key: 'price', label: 'Price', render: (row) => `${money(row.price)} / ${row.unit}` }, { key: 'stock', label: 'Stock' }, { key: 'status', label: 'Status' },
+          {
+            key: 'photo',
+            label: 'Photo',
+            render: (row) => {
+              const src = resolveMediaUrl(row.images?.[0] || row.imageUrl || '');
+              return src ? (
+                <img className="product-table-thumb" src={src} alt={row.name || 'Product'} />
+              ) : (
+                <span className="muted">No photo</span>
+              );
+            },
+          },
+          { key: 'name', label: 'Product' },
+          { key: 'price', label: 'Price', render: (row) => `${money(row.price)} / ${row.unit}` },
+          { key: 'stock', label: 'Stock' },
+          { key: 'status', label: 'Status' },
         ]} actions={(row) => (
           <div className="action-row action-row-compact">
             <button className="btn btn-light btn-compact" type="button" onClick={() => { setFormError(''); setEditing({ ...row, imageUrl: row.images?.[0] || '' }); }}><Edit2 size={14} /> Edit</button>

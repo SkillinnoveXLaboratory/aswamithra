@@ -18,7 +18,7 @@ export default function App() {
       <Route
         path="/onboarding/:role"
         render={() => (
-          <ProtectedRoute>
+          <ProtectedRoute allowOnboarding>
             <OnboardingPage />
           </ProtectedRoute>
         )}

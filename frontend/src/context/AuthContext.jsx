@@ -11,19 +11,46 @@ function readJson(key) {
   }
 }
 
+function syncAccessFlags(nextUser, payload = {}) {
+  const needsOnboarding =
+    Boolean(payload.needsOnboarding) || nextUser?.status === 'needs_onboarding';
+  // Pending is driven by live user status only — never keep a stale localStorage lock
+  // after admin approval (status becomes active).
+  const isPendingApproval = nextUser?.status === 'pending_kyc';
+
+  if (needsOnboarding) localStorage.setItem('aswamithra_needs_onboarding', 'true');
+  else localStorage.removeItem('aswamithra_needs_onboarding');
+
+  if (isPendingApproval) localStorage.setItem('aswamithra_pending_approval', 'true');
+  else localStorage.removeItem('aswamithra_pending_approval');
+
+  return { needsOnboarding, isPendingApproval };
+}
+
 export function AuthProvider({ children }) {
-  const [user, setUser] = useState(() => readJson('aswamithra_user'));
+  const [user, setUserState] = useState(() => {
+    const stored = readJson('aswamithra_user');
+    if (stored) syncAccessFlags(stored);
+    return stored;
+  });
   const [token, setToken] = useState(() => localStorage.getItem('aswamithra_access_token'));
+
+  const setUser = (nextUser) => {
+    setUserState(nextUser);
+    if (nextUser) {
+      localStorage.setItem('aswamithra_user', JSON.stringify(nextUser));
+      syncAccessFlags(nextUser);
+    }
+  };
 
   const saveSession = (payload) => {
     const nextUser = payload.user;
-    setUser(nextUser);
+    setUserState(nextUser);
     setToken(payload.accessToken);
     localStorage.setItem('aswamithra_user', JSON.stringify(nextUser));
     localStorage.setItem('aswamithra_access_token', payload.accessToken);
     if (payload.refreshToken) localStorage.setItem('aswamithra_refresh_token', payload.refreshToken);
-    if (payload.isPendingApproval) localStorage.setItem('aswamithra_pending_approval', 'true');
-    else localStorage.removeItem('aswamithra_pending_approval');
+    syncAccessFlags(nextUser, payload);
   };
 
   const sendOtp = async ({ mobile, role }) => unwrap(await endpoints.sendOtp({ mobile, role }));
@@ -52,20 +79,25 @@ export function AuthProvider({ children }) {
     } catch {
       // Local logout should still complete if the server is unavailable.
     }
-    setUser(null);
+    setUserState(null);
     setToken(null);
     localStorage.removeItem('aswamithra_user');
     localStorage.removeItem('aswamithra_access_token');
     localStorage.removeItem('aswamithra_refresh_token');
     localStorage.removeItem('aswamithra_pending_approval');
+    localStorage.removeItem('aswamithra_needs_onboarding');
   };
+
+  const needsOnboarding = user?.status === 'needs_onboarding';
+  const isPendingApproval = user?.status === 'pending_kyc';
 
   const value = useMemo(
     () => ({
       user,
       token,
-      isPendingApproval: localStorage.getItem('aswamithra_pending_approval') === 'true' || user?.status === 'pending_kyc',
-      isAuthenticated: Boolean(user && token) && user?.status !== 'pending_kyc',
+      needsOnboarding,
+      isPendingApproval,
+      isAuthenticated: Boolean(user && token),
       sendOtp,
       verifyOtp,
       loginPin,
@@ -73,7 +105,7 @@ export function AuthProvider({ children }) {
       logout,
       setUser,
     }),
-    [user, token],
+    [user, token, needsOnboarding, isPendingApproval],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

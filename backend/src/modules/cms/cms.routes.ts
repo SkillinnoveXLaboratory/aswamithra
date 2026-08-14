@@ -8,13 +8,16 @@ import {
   deleteCmsPage,
   deleteSocialLink,
   findCmsPageBySlug,
+  getSiteConfig,
   listActiveBanners,
   listBanners,
   listSocialLinks,
+  updateSiteConfig,
   upsertBanner,
   upsertCmsPage,
   upsertSocialLink,
 } from '../../services/sql-store';
+
 
 const router = Router();
 
@@ -187,7 +190,7 @@ async function buildSiteConfig() {
     ]);
 
     return buildFromSource(activeFarmers, activeCustomers, activeB2b, totalProducts, activeBanners);
-  } catch {
+    } catch {
     const activeFarmers = db.users.filter((user) => user.role === 'farmer' && user.status === 'active').length;
     const activeCustomers = db.users.filter((user) => user.role === 'customer' && user.status === 'active').length;
     const activeB2b = db.users.filter((user) => user.role === 'b2b' && user.status === 'active').length;
@@ -198,7 +201,51 @@ async function buildSiteConfig() {
   }
 }
 
-// Banners CRUD
+// Site config with map fields
+router.get('/site/config', async (req: Request, res: Response) => {
+  try {
+    const cfg = await getSiteConfig();
+    const config = await buildSiteConfig();
+    return sendSuccess(res, 200, 'Frontend site configuration', {
+      ...config,
+      map: {
+        mapLat: cfg.mapLat,
+        mapLng: cfg.mapLng,
+        mapAddress: cfg.mapAddress,
+      },
+    });
+  } catch {
+    const config = await buildSiteConfig();
+    return sendSuccess(res, 200, 'Frontend site configuration', {
+      ...config,
+      map: {
+        mapLat: db.mapLat,
+        mapLng: db.mapLng,
+        mapAddress: db.mapAddress,
+      },
+    });
+  }
+});
+
+router.put('/admin/site/config', async (req: Request, res: Response) => {
+  const { mapLat, mapLng, mapAddress } = req.body || {};
+  try {
+    await updateSiteConfig({
+      mapLat: mapLat != null ? Number(mapLat) : undefined,
+      mapLng: mapLng != null ? Number(mapLng) : undefined,
+      mapAddress: mapAddress ?? undefined,
+    });
+    return sendSuccess(res, 200, 'Site config updated', { mapLat: db.mapLat, mapLng: db.mapLng, mapAddress: db.mapAddress });
+  } catch (error) {
+    // Fallback: update in-memory store only
+    if (mapLat != null) db.mapLat = Number(mapLat);
+    if (mapLng != null) db.mapLng = Number(mapLng);
+    if (mapAddress != null) db.mapAddress = mapAddress;
+    return sendSuccess(res, 200, 'Site config updated (in-memory)', { mapLat: db.mapLat, mapLng: db.mapLng, mapAddress: db.mapAddress });
+  }
+});
+
+
 router.get('/banners', async (req: Request, res: Response) => {
   const rows = await listActiveBanners();
   const activeBanners = rows.map((banner) => ({

@@ -29,22 +29,27 @@ const upload = multer({
   storage,
   limits: { fileSize: 50 * 1024 * 1024 },
   fileFilter: (_req, file, cb) => {
-    if (file.mimetype.startsWith('image/') || file.mimetype.startsWith('video/')) {
+    if (
+      file.mimetype.startsWith('image/') ||
+      file.mimetype.startsWith('video/') ||
+      file.mimetype === 'application/pdf'
+    ) {
       cb(null, true);
     } else {
-      cb(new Error('Only image files (JPEG, PNG, WEBP, GIF, SVG) and video files (MP4, MOV, AVI, WEBM) are allowed'));
+      cb(new Error('Only image, video, or PDF files are allowed'));
     }
   },
 });
 
 function toUploadResponse(file: Express.Multer.File, folder: string) {
   const isVideo = file.mimetype.startsWith('video/');
-  const format = path.extname(file.filename).replace('.', '') || (isVideo ? 'mp4' : 'jpg');
+  const isDocument = file.mimetype === 'application/pdf';
+  const format = path.extname(file.filename).replace('.', '') || (isVideo ? 'mp4' : isDocument ? 'pdf' : 'jpg');
   return {
     url: publicUploadUrl(folder, file.filename),
     filename: file.filename,
     folder,
-    type: isVideo ? 'video' : 'image',
+    type: isVideo ? 'video' : isDocument ? 'document' : 'image',
     format,
     sizeBytes: file.size,
   };
@@ -64,11 +69,17 @@ router.post(
     const files = req.files as Express.Multer.File[];
 
     if (files && files.length > 0) {
-      const results = files.map((file) => toUploadResponse(file, folder));
+      const nonEmpty = files.filter((file) => file.size > 0);
+      if (!nonEmpty.length) {
+        return sendError(res, 400, 'EMPTY_FILE', 'Uploaded file is empty. Please choose a valid image and try again.');
+      }
+
+      const results = nonEmpty.map((file) => toUploadResponse(file, folder));
 
       if (results.length === 1) {
         const single = results[0];
-        return sendSuccess(res, 201, `${single.type === 'video' ? 'Video' : 'Image'} uploaded successfully`, single);
+        const label = single.type === 'video' ? 'Video' : single.type === 'document' ? 'Document' : 'Image';
+        return sendSuccess(res, 201, `${label} uploaded successfully`, single);
       }
 
       return sendSuccess(res, 201, `${results.length} media files uploaded successfully`, {
@@ -79,14 +90,15 @@ router.post(
 
     if (req.body && req.body.base64) {
       const result = saveBase64Upload(req.body.base64, folder);
-      return sendSuccess(res, 201, `${result.type === 'video' ? 'Video' : 'Image'} uploaded successfully`, result);
+      const label = result.type === 'video' ? 'Video' : result.type === 'document' ? 'Document' : 'Image';
+      return sendSuccess(res, 201, `${label} uploaded successfully`, result);
     }
 
     return sendError(
       res,
       400,
       'NO_MEDIA_PROVIDED',
-      'Please upload an image or video file via multipart form-data ("file" or "files") or provide a "base64" payload.'
+      'Please upload an image, video, or PDF via multipart form-data ("file" or "files") or provide a "base64" payload.'
     );
   })
 );

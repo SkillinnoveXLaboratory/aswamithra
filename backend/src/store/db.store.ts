@@ -7,7 +7,7 @@ export interface User {
   email?: string;
   name: string;
   role: 'customer' | 'farmer' | 'b2b' | 'admin';
-  status: 'active' | 'pending_kyc' | 'suspended';
+  status: 'active' | 'needs_onboarding' | 'pending_kyc' | 'suspended';
   language: string;
   createdAt: string;
   farmName?: string;
@@ -50,6 +50,19 @@ export interface KycSubmission {
   bankVerified: boolean;
   submittedAt: string;
   documents?: string[];
+  /** Exact onboarding payload for admin review (not masked drafts). */
+  details?: Record<string, unknown>;
+  mandal?: string;
+  state?: string;
+  pincode?: string;
+  lat?: string;
+  lng?: string;
+  mobile?: string;
+  bankAccountName?: string;
+  aadhaarNumber?: string;
+  bankAccountNumber?: string;
+  cropsGrown?: string;
+  landSizeAcres?: string;
 }
 
 export interface Category {
@@ -614,7 +627,12 @@ class DatabaseStore {
     { id: 'rev_101', farmerId: 'farmer_881', productId: 'p-201', customerName: 'Anitha R.', rating: 5, comment: 'Vine ripe tomatoes are super fresh!', date: '2026-08-04' },
   ];
 
-  disputes: Dispute[] = [];
+    disputes: Dispute[] = [];
+
+  // Site configuration (controllable from admin panel)
+  mapLat: number = 16.5062;
+  mapLng: number = 80.6480;
+  mapAddress: string = 'Vijayawada, Andhra Pradesh';
 
   // PostGIS Distance Math (Haversine formula in km)
   calculateDistanceKm(lat1: number, lon1: number, lat2: number, lon2: number): number {

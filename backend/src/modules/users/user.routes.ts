@@ -1,9 +1,148 @@
 import { Router, Request, Response } from 'express';
 import { sendSuccess, sendError } from '../../utils/response';
-import { db, UserAddress, User } from '../../store/db.store';
-import { deleteAddress, deleteKycByUserId, deleteUserById, deactivateProductsBySellerId, deriveUserStatusFromKyc, findUserById, insertAddress, listAddressesForUser, listKycByRole, listUsersByRole, toStoreAddress, toStoreUser, upsertUser } from '../../services/sql-store';
+import { db, KycSubmission, UserAddress, User } from '../../store/db.store';
+import {
+  deleteAddress,
+  deleteKycByUserId,
+  deleteUserById,
+  deactivateProductsBySellerId,
+  deriveUserStatusFromKyc,
+  findKycByUserId,
+  findUserById,
+  insertAddress,
+  listAddressesForUser,
+  listKycByRole,
+  listUsersByRole,
+  toStoreAddress,
+  toStoreKyc,
+  toStoreUser,
+  upsertKyc,
+  upsertUser,
+} from '../../services/sql-store';
 
 const router = Router();
+
+function pickText(...values: Array<unknown>) {
+  for (const value of values) {
+    if (value === null || value === undefined) continue;
+    const text = String(value).trim();
+    if (text) return text;
+  }
+  return '';
+}
+
+async function enrichUserKyc(userId: string, user?: User | null) {
+  const row = await findKycByUserId(userId);
+  const memory = db.kycSubmissions.find((item) => item.userId === userId);
+  const sub = row ? toStoreKyc(row) : memory || null;
+  if (!sub) return null;
+
+  const details = { ...(sub.details || {}) } as Record<string, unknown>;
+  if (user?.mobile && !details.mobile) details.mobile = user.mobile;
+  if (user?.email && !details.businessEmail && !details.email) details.email = user.email;
+
+  return {
+    ...sub,
+    details,
+    mobile: pickText(sub.mobile, details.mobile, user?.mobile),
+    aadhaarNumber: pickText(sub.aadhaarNumber, details.aadhaarNumber, sub.aadhaarMasked),
+    bankAccountNumber: pickText(sub.bankAccountNumber, details.bankAccountNumber, sub.bankAccountMasked),
+    bankAccountName: pickText(sub.bankAccountName, details.bankAccountName),
+    ifsc: pickText(details.ifscCode, sub.ifsc),
+    gstin: pickText(sub.gstin, details.gstin),
+    mandal: pickText(sub.mandal, details.mandal),
+    state: pickText(sub.state, details.state),
+    pincode: pickText(sub.pincode, details.pincode),
+    village: pickText(sub.village, details.village),
+    district: pickText(sub.district, details.district),
+    address: pickText(details.address),
+    cropsGrown: pickText(sub.cropsGrown, details.cropsGrown),
+    landSizeAcres: pickText(sub.landSizeAcres, details.landSizeAcres),
+    businessName: pickText(details.businessName, sub.name),
+    ownerName: pickText(details.ownerName),
+    businessEmail: pickText(details.businessEmail, user?.email),
+    businessType: pickText(details.businessType),
+    lat: pickText(sub.lat, details.lat),
+    lng: pickText(sub.lng, details.lng),
+    aadhaarDocumentUrl: pickText(details.aadhaarDocumentUrl, ...(sub.documents || [])),
+    tradeLicenseDocument: pickText(details.tradeLicenseDocument, ...(sub.documents || [])),
+    documents: sub.documents || [],
+  };
+}
+
+function buildKycFromAdminProfile(user: User, profile: Record<string, unknown>, existing: KycSubmission | null) {
+  const text = (key: string) => {
+    const value = profile[key];
+    return typeof value === 'string' || typeof value === 'number' ? String(value).trim() : '';
+  };
+  const role = user.role === 'b2b' ? 'b2b' : 'farmer';
+  const documents = [
+    text('aadhaarDocumentUrl'),
+    text('tradeLicenseDocument'),
+  ].filter(Boolean);
+  const details = {
+    fullName: text('name') || text('businessName') || text('ownerName') || user.name,
+    mobile: text('mobile') || user.mobile,
+    role,
+    village: text('village'),
+    mandal: text('mandal'),
+    district: text('district'),
+    state: text('state'),
+    pincode: text('pincode'),
+    address: text('address'),
+    lat: text('lat'),
+    lng: text('lng'),
+    gstin: text('gstin'),
+    aadhaarNumber: text('aadhaarNumber'),
+    aadhaarDocumentUrl: text('aadhaarDocumentUrl'),
+    bankAccountName: text('bankAccountName'),
+    bankAccountNumber: text('bankAccountNumber'),
+    ifscCode: text('ifscCode'),
+    cropsGrown: text('cropsGrown'),
+    landSizeAcres: text('landSizeAcres'),
+    businessName: text('businessName'),
+    ownerName: text('ownerName'),
+    businessEmail: text('businessEmail'),
+    businessType: text('businessType'),
+    tradeLicenseDocument: text('tradeLicenseDocument'),
+  };
+
+  const aadhaarNumber = text('aadhaarNumber');
+  const bankAccountNumber = text('bankAccountNumber');
+
+  return {
+    id: existing?.id || `kyc_sub_${Date.now()}`,
+    userId: user.id,
+    name: role === 'b2b' ? text('businessName') || user.name : text('name') || user.name,
+    role: role as 'farmer' | 'b2b',
+    village: text('village') || undefined,
+    district: text('district') || undefined,
+    mandal: text('mandal') || undefined,
+    state: text('state') || undefined,
+    pincode: text('pincode') || undefined,
+    lat: text('lat') || undefined,
+    lng: text('lng') || undefined,
+    mobile: text('mobile') || user.mobile || undefined,
+    gstin: text('gstin') || undefined,
+    aadhaarNumber: aadhaarNumber || undefined,
+    bankAccountName: text('bankAccountName') || undefined,
+    bankAccountNumber: bankAccountNumber || undefined,
+    cropsGrown: text('cropsGrown') || undefined,
+    landSizeAcres: text('landSizeAcres') || undefined,
+    aadhaarMasked: aadhaarNumber
+      ? `XXXX-XXXX-${aadhaarNumber.slice(-4)}`
+      : existing?.aadhaarMasked || undefined,
+    bankAccountMasked: bankAccountNumber
+      ? `XXXXXX${bankAccountNumber.slice(-4)}`
+      : existing?.bankAccountMasked || undefined,
+    ifsc: text('ifscCode') || existing?.ifsc || undefined,
+    status: (existing?.status || 'pending') as KycSubmission['status'],
+    bankVerified: existing?.bankVerified || false,
+    submittedAt: existing?.submittedAt || new Date().toISOString(),
+    documents: documents.length ? documents : existing?.documents || [],
+    details,
+  } as KycSubmission;
+}
 
 // Current User Profile
 router.get('/users/me', async (req: Request, res: Response) => {
@@ -254,7 +393,12 @@ router.get('/admin/users/:id', async (req: Request, res: Response) => {
   if (!dbUser && !memoryUser) return sendError(res, 404, 'USER_NOT_FOUND', 'User not found');
   const user = dbUser ? toStoreUser(dbUser) : { ...memoryUser!, hasPin: Boolean(memoryUser?.pinHash) };
   const { pinHash, ...safeUser } = user as typeof user & { pinHash?: string };
-  return sendSuccess(res, 200, 'User details retrieved', safeUser);
+  const kyc = await enrichUserKyc(safeUser.id, safeUser as User);
+  return sendSuccess(res, 200, 'User details retrieved', {
+    ...safeUser,
+    hasPin: Boolean(dbUser?.pin_hash || memoryUser?.pinHash || (safeUser as { hasPin?: boolean }).hasPin),
+    kyc,
+  });
 });
 
 router.put('/admin/users/:id', async (req: Request, res: Response) => {
@@ -264,9 +408,10 @@ router.put('/admin/users/:id', async (req: Request, res: Response) => {
   const baseUser = dbUser ? toStoreUser(dbUser) : memoryUser;
   if (!baseUser) return sendError(res, 404, 'USER_NOT_FOUND', 'User not found');
 
+  const { pin: _pin, kycProfile, kyc: _kyc, hasPin: _hasPin, createdAt: _createdAt, ...profileFields } = req.body || {};
   const updated: User = {
     ...baseUser,
-    ...req.body,
+    ...profileFields,
     id: userId,
     role: baseUser.role,
   };
@@ -283,7 +428,54 @@ router.put('/admin/users/:id', async (req: Request, res: Response) => {
     language: updated.language,
     avatarUrl: updated.avatar ?? null,
   });
-  return sendSuccess(res, 200, 'User profile updated by Admin', updated);
+
+  let nextKyc = null;
+  if ((updated.role === 'farmer' || updated.role === 'b2b') && kycProfile && typeof kycProfile === 'object') {
+    const existingRow = await findKycByUserId(userId);
+    const existingMemory = db.kycSubmissions.find((item) => item.userId === userId) || null;
+    const existing = existingRow ? toStoreKyc(existingRow) : existingMemory;
+    const nextSub = buildKycFromAdminProfile(updated, kycProfile as Record<string, unknown>, existing);
+    const memoryIndex = db.kycSubmissions.findIndex((item) => item.userId === userId || item.id === nextSub.id);
+    if (memoryIndex === -1) db.kycSubmissions.push(nextSub);
+    else db.kycSubmissions[memoryIndex] = nextSub;
+
+    await upsertKyc({
+      id: nextSub.id,
+      userId: nextSub.userId,
+      name: nextSub.name,
+      role: nextSub.role,
+      village: nextSub.village ?? null,
+      district: nextSub.district ?? null,
+      gstin: nextSub.gstin ?? null,
+      aadhaarMasked: nextSub.aadhaarMasked ?? null,
+      bankAccountMasked: nextSub.bankAccountMasked ?? null,
+      ifsc: nextSub.ifsc ?? null,
+      status: nextSub.status,
+      bankVerified: nextSub.bankVerified,
+      documents: nextSub.documents ?? [],
+      details: nextSub.details ?? {},
+      mandal: nextSub.mandal ?? null,
+      state: nextSub.state ?? null,
+      pincode: nextSub.pincode ?? null,
+      lat: nextSub.lat ?? null,
+      lng: nextSub.lng ?? null,
+      mobile: nextSub.mobile ?? null,
+      bankAccountName: nextSub.bankAccountName ?? null,
+      aadhaarNumber: nextSub.aadhaarNumber ?? null,
+      bankAccountNumber: nextSub.bankAccountNumber ?? null,
+      cropsGrown: nextSub.cropsGrown ?? null,
+      landSizeAcres: nextSub.landSizeAcres ?? null,
+    });
+    nextKyc = await enrichUserKyc(userId, updated);
+  } else {
+    nextKyc = await enrichUserKyc(userId, updated);
+  }
+
+  return sendSuccess(res, 200, 'User profile updated by Admin', {
+    ...updated,
+    hasPin: Boolean(dbUser?.pin_hash || memoryUser?.pinHash),
+    kyc: nextKyc,
+  });
 });
 
 router.put('/admin/users/:id/status', (req: Request, res: Response) => {

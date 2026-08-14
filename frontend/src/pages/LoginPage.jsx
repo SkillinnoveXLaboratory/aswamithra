@@ -25,19 +25,13 @@ export default function LoginPage() {
 
   const redirectFor = (payload) => {
     const actualRole = payload.user?.role || role;
-    if ((payload.isNewUser || payload.isPendingApproval) && actualRole !== 'admin' && actualRole !== 'customer') {
-      history.push(`/pending/${actualRole}`);
-      return;
-    }
-    if (payload.isNewUser && actualRole === 'customer') {
+    // New accounts (or incomplete profiles) must finish onboarding/KYC first.
+    if ((payload.isNewUser || payload.needsOnboarding || payload.user?.status === 'needs_onboarding') && actualRole !== 'admin') {
       history.push(`/onboarding/${actualRole}`);
       return;
     }
-    if (payload.isNewUser) {
-      history.push(`/onboarding/${actualRole}`);
-      return;
-    }
-    if (payload.user?.status === 'pending_kyc' && actualRole !== 'customer') {
+    // Only after KYC/onboarding submission should farmer/B2B wait for admin approval.
+    if ((payload.isPendingApproval || payload.user?.status === 'pending_kyc') && actualRole !== 'admin' && actualRole !== 'customer') {
       history.push(`/pending/${actualRole}`);
       return;
     }
@@ -53,7 +47,7 @@ export default function LoginPage() {
       setStep('otp');
       setMessage('OTP sent. For this development backend, any 6 digits will verify.');
     } catch (error) {
-      setMessage(error?.response?.data?.message || 'Unable to send OTP');
+      setMessage(error?.response?.data?.error?.message || error?.response?.data?.message || 'Unable to send OTP');
     } finally {
       setLoading(false);
     }
@@ -67,7 +61,7 @@ export default function LoginPage() {
       const payload = await verifyOtp({ mobile, otp, role });
       redirectFor(payload);
     } catch (error) {
-      setMessage(error?.response?.data?.message || 'Unable to verify OTP');
+      setMessage(error?.response?.data?.error?.message || error?.response?.data?.message || 'Unable to verify OTP');
     } finally {
       setLoading(false);
     }
@@ -81,7 +75,7 @@ export default function LoginPage() {
       const payload = await loginPin({ mobile, pin, role });
       redirectFor(payload);
     } catch (error) {
-      setMessage(error?.response?.data?.message || 'Invalid mobile number or security PIN');
+      setMessage(error?.response?.data?.error?.message || error?.response?.data?.message || 'Invalid mobile number or security PIN');
     } finally {
       setLoading(false);
     }

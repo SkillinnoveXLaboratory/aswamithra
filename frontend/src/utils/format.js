@@ -22,7 +22,7 @@ export function roleHome(role) {
 export function statusTone(status = '') {
   const normalized = status.toLowerCase();
   if (['active', 'approved', 'paid', 'delivered', 'accepted', 'settled'].includes(normalized)) return 'good';
-  if (['pending', 'placed', 'open', 'pending_kyc'].includes(normalized)) return 'warn';
+  if (['pending', 'placed', 'open', 'pending_kyc', 'needs_onboarding'].includes(normalized)) return 'warn';
   if (['rejected', 'cancelled', 'suspended'].includes(normalized)) return 'bad';
   return 'soft';
 }

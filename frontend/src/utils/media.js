@@ -11,6 +11,8 @@ export function getApiOrigin() {
 export function resolveMediaUrl(url) {
   if (!url) return '';
   if (/^https?:\/\//i.test(url) || url.startsWith('data:') || url.startsWith('blob:')) return url;
+  // Keep app-relative /uploads paths so Vite proxy can serve them in local dev.
+  if (url.startsWith('/uploads/')) return url;
   if (url.startsWith('/')) return `${getApiOrigin()}${url}`;
   return `${getApiOrigin()}/${url}`;
 }

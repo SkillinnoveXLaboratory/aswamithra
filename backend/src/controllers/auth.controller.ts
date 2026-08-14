@@ -5,11 +5,14 @@ import { signJwt } from '../utils/jwt';
 import { hashPin, verifyPinHash } from '../utils/pin';
 import {
   findUserByMobile,
+  findUserByMobileAndRole,
   findUserById,
+  findKycByUserId,
+  deleteKycByUserId,
   getUserPinHash,
   setUserPinHash,
-  upsertKyc,
   upsertUser,
+  toStoreKyc,
   toStoreUser,
 } from '../services/sql-store';
 import { AuthenticatedRequest } from '../middlewares/auth.middleware';
@@ -35,19 +38,48 @@ export class AuthController {
     if (memoryUser) memoryUser.pinHash = pinHash;
   }
 
+  /** True only when farmer/B2B actually submitted KYC/onboarding details (not a blank shell). */
+  private static hasSubmittedKyc(kycSub?: { documents?: string[]; aadhaarMasked?: string; gstin?: string; village?: string; bankAccountMasked?: string; status?: string } | null) {
+    if (!kycSub) return false;
+    if (kycSub.status === 'approved') return true;
+    return Boolean(
+      (kycSub.documents && kycSub.documents.length > 0) ||
+        kycSub.aadhaarMasked ||
+        kycSub.gstin ||
+        kycSub.village ||
+        kycSub.bankAccountMasked,
+    );
+  }
+
   private static async resolveUserForLogin(mobile: string, role?: string) {
-    const dbUser = await findUserByMobile(mobile);
-    let user: AuthUser | undefined = dbUser ? { ...toStoreUser(dbUser) } : db.users.find((u) => u.mobile === mobile);
+    const requestedRole = (role || 'customer') as User['role'];
+    const dbUserForRole = await findUserByMobileAndRole(mobile, requestedRole);
+    const dbUserAny = dbUserForRole ? null : await findUserByMobile(mobile);
+    let user: AuthUser | undefined = dbUserForRole
+      ? { ...toStoreUser(dbUserForRole) }
+      : db.users.find((u) => u.mobile === mobile && u.role === requestedRole);
+
     let isNewUser = false;
     let isPendingApproval = false;
+    let needsOnboarding = false;
+
+    // Same mobile already belongs to a different role — do not silently switch dashboards.
+    if (!user && dbUserAny && dbUserAny.role !== requestedRole) {
+      const err: any = new Error(`This mobile number is already registered as ${dbUserAny.role}. Please login with the ${dbUserAny.role} role.`);
+      err.statusCode = 409;
+      err.code = 'ROLE_MISMATCH';
+      err.existingRole = dbUserAny.role;
+      throw err;
+    }
 
     if (!user) {
-      const initialStatus = role === 'farmer' || role === 'b2b' ? 'pending_kyc' : 'active';
+      // New farmer/B2B must complete onboarding/KYC form before waiting for admin approval.
+      const initialStatus = requestedRole === 'farmer' || requestedRole === 'b2b' ? 'needs_onboarding' : 'active';
       user = {
         id: 'usr_' + Date.now(),
         mobile,
-        name: role === 'farmer' ? 'New Farmer' : role === 'b2b' ? 'New B2B Business' : 'New Customer',
-        role: (role || 'customer') as User['role'],
+        name: requestedRole === 'farmer' ? 'New Farmer' : requestedRole === 'b2b' ? 'New B2B Business' : requestedRole === 'admin' ? 'Admin' : 'New Customer',
+        role: requestedRole,
         status: initialStatus,
         language: 'te',
         createdAt: new Date().toISOString(),
@@ -64,23 +96,33 @@ export class AuthController {
       isNewUser = true;
     }
 
-    const kycSub = db.kycSubmissions.find((sub) => sub.userId === user!.id);
-    if ((user.role === 'farmer' || user.role === 'b2b') && (!kycSub || kycSub.status !== 'approved')) {
-      user.status = 'pending_kyc';
-      isPendingApproval = true;
-      if (!kycSub) {
-        const pendingSub = {
-          id: `kyc_sub_${Date.now()}`,
-          userId: user.id,
-          name: user.name,
-          role: user.role as 'farmer' | 'b2b',
-          status: 'pending' as const,
-          bankVerified: false,
-          submittedAt: new Date().toISOString(),
-        };
-        db.kycSubmissions.push(pendingSub);
-        await upsertKyc(pendingSub);
+    if (user.role === 'farmer' || user.role === 'b2b') {
+      const memoryKyc = db.kycSubmissions.find((sub) => sub.userId === user!.id);
+      const kycRow = await findKycByUserId(user.id);
+      const kycSub = memoryKyc || (kycRow ? toStoreKyc(kycRow) : null);
+
+      if (kycSub?.status === 'approved' || user.status === 'active') {
+        // Approved KYC or already-active account → farmer dashboard access.
+        if (kycSub?.status === 'approved') user.status = 'active';
+        isPendingApproval = user.status === 'pending_kyc';
+        needsOnboarding = false;
+        if (user.status === 'active') isPendingApproval = false;
+      } else if (AuthController.hasSubmittedKyc(kycSub)) {
+        user.status = 'pending_kyc';
+        isPendingApproval = true;
+        needsOnboarding = false;
+      } else {
+        // No real KYC yet — send user through onboarding, do not invent a pending submission.
+        user.status = 'needs_onboarding';
+        isPendingApproval = false;
+        needsOnboarding = true;
+        const blankIdx = db.kycSubmissions.findIndex((sub) => sub.userId === user!.id && !AuthController.hasSubmittedKyc(sub));
+        if (blankIdx !== -1) db.kycSubmissions.splice(blankIdx, 1);
+        if (kycRow && !AuthController.hasSubmittedKyc(toStoreKyc(kycRow))) {
+          await deleteKycByUserId(user.id);
+        }
       }
+
       await upsertUser({
         id: user.id,
         mobile: user.mobile,
@@ -93,11 +135,7 @@ export class AuthController {
       });
     }
 
-    if (user.status === 'pending_kyc' && (user.role === 'farmer' || user.role === 'b2b')) {
-      isPendingApproval = true;
-    }
-
-    return { user, isNewUser, isPendingApproval };
+    return { user, isNewUser, isPendingApproval, needsOnboarding };
   }
 
   public static async sendOtp(req: AuthenticatedRequest, res: Response) {
@@ -118,33 +156,41 @@ export class AuthController {
       return sendError(res, 400, 'VALIDATION_ERROR', 'Mobile number and 6-digit OTP are required');
     }
 
-    const { user, isNewUser, isPendingApproval } = await AuthController.resolveUserForLogin(mobile, role);
+    try {
+      const { user, isNewUser, isPendingApproval, needsOnboarding } = await AuthController.resolveUserForLogin(mobile, role);
 
-    const accessToken = signJwt({
-      id: user.id,
-      mobile: user.mobile,
-      role: user.role,
-      name: user.name,
-    });
-
-    const refreshToken = signJwt(
-      {
+      const accessToken = signJwt({
         id: user.id,
         mobile: user.mobile,
         role: user.role,
         name: user.name,
-      },
-      7 * 86400,
-    );
+      });
 
-    return sendSuccess(res, 200, 'OTP verified successfully', {
-      accessToken,
-      refreshToken,
-      expiresIn: 86400,
-      isNewUser,
-      isPendingApproval,
-      user: toPublicUser(user),
-    });
+      const refreshToken = signJwt(
+        {
+          id: user.id,
+          mobile: user.mobile,
+          role: user.role,
+          name: user.name,
+        },
+        7 * 86400,
+      );
+
+      return sendSuccess(res, 200, 'OTP verified successfully', {
+        accessToken,
+        refreshToken,
+        expiresIn: 86400,
+        isNewUser,
+        isPendingApproval,
+        needsOnboarding,
+        user: toPublicUser(user),
+      });
+    } catch (error: any) {
+      if (error?.code === 'ROLE_MISMATCH') {
+        return sendError(res, 409, 'ROLE_MISMATCH', error.message);
+      }
+      throw error;
+    }
   }
 
   public static async loginPin(req: AuthenticatedRequest, res: Response) {
@@ -156,15 +202,29 @@ export class AuthController {
       return sendError(res, 400, 'VALIDATION_ERROR', 'A 4-digit security PIN is required');
     }
 
-    const dbUser = await findUserByMobile(mobile);
-    const memoryUser = db.users.find((u) => u.mobile === mobile);
+    const dbUser = role ? await findUserByMobileAndRole(mobile, role) : await findUserByMobile(mobile);
+    const anyRoleUser = dbUser ? null : await findUserByMobile(mobile);
+    if (!dbUser && anyRoleUser && role && anyRoleUser.role !== role) {
+      return sendError(
+        res,
+        409,
+        'ROLE_MISMATCH',
+        `This mobile number is already registered as ${anyRoleUser.role}. Please login with the ${anyRoleUser.role} role.`,
+      );
+    }
+    const memoryUser = db.users.find((u) => u.mobile === mobile && (!role || u.role === role));
     const user = dbUser ? { ...toStoreUser(dbUser) } : memoryUser ? toPublicUser(memoryUser) : undefined;
     if (!user) {
       return sendError(res, 401, 'INVALID_CREDENTIALS', 'Invalid mobile number or security PIN');
     }
 
     if (role && user.role !== role) {
-      return sendError(res, 401, 'INVALID_CREDENTIALS', 'Invalid mobile number or security PIN');
+      return sendError(
+        res,
+        409,
+        'ROLE_MISMATCH',
+        `This mobile number is already registered as ${user.role}. Please login with the ${user.role} role.`,
+      );
     }
 
     if (user.status === 'suspended') {
@@ -176,7 +236,24 @@ export class AuthController {
       return sendError(res, 401, 'INVALID_CREDENTIALS', 'Invalid mobile number or security PIN');
     }
 
-    const isPendingApproval = user.status === 'pending_kyc' && (user.role === 'farmer' || user.role === 'b2b');
+    let isPendingApproval = false;
+    let needsOnboarding = false;
+    if (user.role === 'farmer' || user.role === 'b2b') {
+      const memoryKyc = db.kycSubmissions.find((sub) => sub.userId === user.id);
+      const kycRow = await findKycByUserId(user.id);
+      const kycSub = memoryKyc || (kycRow ? toStoreKyc(kycRow) : null);
+      if (kycSub?.status === 'approved' || user.status === 'active') {
+        user.status = 'active';
+        isPendingApproval = false;
+        needsOnboarding = false;
+      } else if (AuthController.hasSubmittedKyc(kycSub)) {
+        user.status = 'pending_kyc';
+        isPendingApproval = true;
+      } else {
+        user.status = 'needs_onboarding';
+        needsOnboarding = true;
+      }
+    }
 
     const accessToken = signJwt({
       id: user.id,
@@ -201,6 +278,7 @@ export class AuthController {
       expiresIn: 86400,
       isNewUser: false,
       isPendingApproval,
+      needsOnboarding,
       user: toPublicUser({ ...user, hasPin: true }),
     });
   }

@@ -13,8 +13,14 @@ export const api = axios.create({
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem('aswamithra_access_token');
   if (token) config.headers.Authorization = `Bearer ${token}`;
-  if (config.data instanceof FormData) {
-    delete config.headers['Content-Type'];
+  if (typeof FormData !== 'undefined' && config.data instanceof FormData) {
+    // Axios defaults to application/json; that breaks multipart uploads (0-byte files).
+    if (config.headers && typeof config.headers.set === 'function') {
+      config.headers.set('Content-Type', undefined);
+    } else {
+      delete config.headers['Content-Type'];
+      if (config.headers.common) delete config.headers.common['Content-Type'];
+    }
   }
   return config;
 });
@@ -50,6 +56,7 @@ export const endpoints = {
   loginPin: (payload) => api.post('/auth/login-pin', payload),
   setPin: (payload) => api.post('/auth/set-pin', payload),
   verifyPin: (payload) => api.post('/auth/verify-pin', payload),
+  google: (payload) => api.post('/auth/google', payload),
   logout: () => api.post('/auth/logout'),
   me: () => api.get('/users/me'),
   updateMe: (payload) => api.put('/users/me', payload),
@@ -59,6 +66,7 @@ export const endpoints = {
   farmerOnboarding: (payload) => api.post('/onboarding/farmer', payload),
   b2bOnboarding: (payload) => api.post('/onboarding/b2b', payload),
   kycStatus: (userId) => api.get('/kyc/status', { params: { userId } }),
+  myKycSubmission: (userId) => api.get('/kyc/my-submission', { params: { userId } }),
   categories: () => api.get('/categories'),
   category: (id) => api.get(`/categories/${id}`),
   createCategory: (payload) => api.post('/admin/categories', payload),
@@ -101,7 +109,7 @@ export const endpoints = {
   adminKycDetail: (id) => api.get(`/admin/kyc/submissions/${id}`),
   submitQuote: (id, payload) => api.post(`/farmer/rfq/${id}/quote`, payload),
   b2bCatalog: () => api.get('/b2b/catalog'),
-  b2bRfqs: () => api.get('/b2b/rfq'),
+    b2bRfqs: (buyerId) => api.get('/b2b/rfq', { params: buyerId ? { buyerId } : {} }),
   createRfq: (payload) => api.post('/b2b/rfq', payload),
   b2bRfq: (id) => api.get(`/b2b/rfq/${id}`),
   acceptQuote: (id) => api.post(`/b2b/quotes/${id}/accept`),
@@ -143,5 +151,6 @@ export const endpoints = {
   resolveDispute: (id, payload) => api.patch(`/admin/disputes/${id}/resolve`, payload),
   deleteDispute: (id) => api.delete(`/admin/disputes/${id}`),
   audit: () => api.get('/admin/audit-logs'),
-  auditDetail: (id) => api.get(`/admin/audit-logs/${id}`),
+    auditDetail: (id) => api.get(`/admin/audit-logs/${id}`),
+  updateSiteConfig: (payload) => api.put('/admin/site/config', payload),
 };

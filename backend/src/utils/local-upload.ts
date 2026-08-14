@@ -14,13 +14,14 @@ const MIME_EXT: Record<string, string> = {
   'video/mp4': '.mp4',
   'video/webm': '.webm',
   'video/quicktime': '.mov',
+  'application/pdf': '.pdf',
 };
 
 export interface LocalUploadResult {
   url: string;
   filename: string;
   folder: string;
-  type: 'image' | 'video';
+  type: 'image' | 'video' | 'document';
   format: string;
   sizeBytes: number;
 }
@@ -60,13 +61,14 @@ export function saveUploadBuffer(
   fs.writeFileSync(filePath, buffer);
 
   const isVideo = mimeType.startsWith('video/');
-  const format = path.extname(filename).replace('.', '') || (isVideo ? 'mp4' : 'jpg');
+  const isDocument = mimeType === 'application/pdf' || mimeType.startsWith('application/');
+  const format = path.extname(filename).replace('.', '') || (isVideo ? 'mp4' : isDocument ? 'pdf' : 'jpg');
 
   return {
     url: publicUploadUrl(safeFolder, filename),
     filename,
     folder: safeFolder,
-    type: isVideo ? 'video' : 'image',
+    type: isVideo ? 'video' : isDocument ? 'document' : 'image',
     format,
     sizeBytes: buffer.length,
   };

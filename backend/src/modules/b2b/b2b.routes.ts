@@ -5,21 +5,11 @@ import { db, B2bRfq, B2bQuote } from '../../store/db.store';
 const router = Router();
 
 // B2B Catalog & RFQ
+// B2B Catalog & RFQ — returns ONLY real products. No seeded mock data is
+// returned, so a brand-new B2B account sees an empty catalog instead of
+// hard-coded placeholder rows.
 router.get('/b2b/catalog', (req: Request, res: Response) => {
   const b2bProducts = db.products.filter((p) => p.b2bTierPrice !== undefined || p.unit === 'quintal' || p.unit === 'ton');
-  if (b2bProducts.length === 0) {
-    return sendSuccess(res, 200, 'B2B wholesale catalog retrieved', [
-      {
-        id: 'b2b_prod_01',
-        cropName: 'Sona Masoori Rice Raw (Grade A)',
-        tierPricePerQuintal: 4800.0,
-        tierPricePerTon: 46000.0,
-        minOrderQty: 10,
-        unit: 'quintal',
-        availableStockQuintals: 500,
-      },
-    ]);
-  }
   return sendSuccess(res, 200, 'B2B wholesale catalog retrieved', b2bProducts);
 });
 
@@ -38,8 +28,13 @@ router.post('/b2b/rfq', (req: Request, res: Response) => {
   return sendSuccess(res, 201, 'Request for Quote (RFQ) submitted', newRfq);
 });
 
+// RFQs are scoped to the requesting buyer so that seeded/example RFQs (which
+// belong to the demo account `b2b_01`) are never returned to a different/new
+// B2B account — keeping the RFQ list empty for new users.
 router.get('/b2b/rfq', (req: Request, res: Response) => {
-  sendSuccess(res, 200, 'B2B submitted RFQs list', db.b2bRfqs);
+  const buyerId = req.query.buyerId as string | undefined;
+  const rfqs = buyerId ? db.b2bRfqs.filter((r) => r.buyerId === buyerId) : [];
+  return sendSuccess(res, 200, 'B2B submitted RFQs list', rfqs);
 });
 
 router.get('/b2b/rfq/:id', (req: Request, res: Response) => {
@@ -103,21 +98,38 @@ router.post('/b2b/quotes/:quote_id/accept', (req: Request, res: Response) => {
 });
 
 // Invoices & Credit Ledger
+// Invoices are only served for orders that actually exist. Previously a
+// hard-coded invoice (INV-2026-00481) was returned for any id, which made
+// every new account look like it already had invoice data.
 router.get('/b2b/invoices/:order_id', (req: Request, res: Response) => {
-  sendSuccess(res, 200, 'GST tax invoice details retrieved', {
-    orderId: req.params.order_id,
-    invoiceNumber: 'INV-2026-00481',
-    gstinBuyer: '37AAAAA0000A1Z5',
-    downloadUrl: `https://storage.aswamithra.in/invoices/${req.params.order_id}.pdf`,
+  const order = db.orders.find((o) => o.id === req.params.order_id);
+  if (!order) {
+    return sendError(res, 404, 'INVOICE_NOT_FOUND', 'No invoice found for this order');
+  }
+  return sendSuccess(res, 200, 'GST tax invoice details retrieved', {
+    orderId: order.id,
+    buyerId: order.buyerId,
+    invoiceNumber: `INV-${order.id}`,
+    gstinBuyer: (order as any).buyerGstin || '',
+    totalAmount: order.totalAmount,
+    downloadUrl: `https://storage.aswamithra.in/invoices/${order.id}.pdf`,
   });
 });
 
+// Credit ledger is computed from the buyer's own orders. No seeded credit is
+// returned, so a new B2B account starts with a zero balance.
 router.get('/b2b/credit-ledger', (req: Request, res: Response) => {
-  sendSuccess(res, 200, 'B2B 15-day trade credit ledger balance', {
-    totalApprovedCreditLimit: 500000.0,
-    utilizedCreditAmount: 145000.0,
-    availableCreditAmount: 355000.0,
-    nextPaymentDueDate: '2026-08-10',
+  const buyerId = req.query.buyerId as string | undefined;
+  const buyerOrders = buyerId ? db.orders.filter((o) => o.buyerId === buyerId) : [];
+  const utilized = buyerOrders
+    .filter((o) => o.paymentStatus !== 'PAID')
+    .reduce((sum, o) => sum + (o.farmerPayoutAmount || o.totalAmount || 0), 0);
+  const rounded = Math.round(utilized * 100) / 100;
+  return sendSuccess(res, 200, 'B2B 15-day trade credit ledger balance', {
+    totalApprovedCreditLimit: 0,
+    utilizedCreditAmount: rounded,
+    availableCreditAmount: 0,
+    nextPaymentDueDate: null,
   });
 });
 

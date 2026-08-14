@@ -42,6 +42,11 @@ const fallbackConfig = {
       { label: 'District hubs', value: '4+' },
     ],
   },
+  map: {
+    mapLat: 16.5062,
+    mapLng: 80.6480,
+    mapAddress: 'Vijayawada, Andhra Pradesh',
+  },
 };
 
 const services = [
@@ -349,8 +354,8 @@ export default function LandingPage() {
             <form onSubmit={(event) => event.preventDefault()}>
               <input type="email" placeholder="Email address*" required />
               <button type="submit" className="btn btn-primary full">Subscribe <ArrowRight size={16} /></button>
-            </form>
-          </div>
+                      </form>
+            </div>
 
           <div className="landing-footer-top">
             <div className="landing-footer-contacts">
@@ -369,6 +374,26 @@ export default function LandingPage() {
                 </div>
               </div>
             </div>
+            {config?.map?.mapLat && config?.map?.mapLng ? (
+              <div className="landing-footer-map">
+                <iframe
+                  title="Footer Location Map"
+                  width="100%"
+                  height="240"
+                  frameBorder="0"
+                  scrolling="no"
+                  marginHeight={0}
+                  marginWidth={0}
+                  src={`https://www.openstreetmap.org/export/embed.html?bbox=${config.map.mapLng - 0.005},${config.map.mapLat - 0.005},${config.map.mapLng + 0.005},${config.map.mapLat + 0.005}&layer=mapnik&marker=${config.map.mapLat},${config.map.mapLng}`}
+                  style={{ border: 0, borderRadius: '8px' }}
+                />
+                {config.map.mapAddress ? <p className="landing-map-address">{config.map.mapAddress}</p> : null}
+              </div>
+            ) : (
+              <div className="landing-footer-map">
+                <div className="landing-map-placeholder">Map location not configured</div>
+              </div>
+            )}
             <img
               src="https://images.unsplash.com/photo-1464226184884-fa280b87c399?q=80&w=400&auto=format&fit=crop"
               className="landing-farmer-img"

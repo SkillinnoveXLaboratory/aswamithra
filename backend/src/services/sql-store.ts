@@ -7,7 +7,7 @@ type DbUserRow = {
   email: string | null;
   name: string;
   role: 'customer' | 'farmer' | 'b2b' | 'admin';
-  status: 'active' | 'suspended' | 'pending_kyc';
+  status: 'active' | 'suspended' | 'pending_kyc' | 'needs_onboarding';
   language: string | null;
   avatar_url: string | null;
   pin_hash: string | null;
@@ -65,6 +65,18 @@ type DbKycRow = {
   bank_verified: boolean;
   submitted_at?: string;
   documents?: string[] | null;
+  details?: Record<string, unknown> | null;
+  mandal?: string | null;
+  state?: string | null;
+  pincode?: string | null;
+  lat?: number | null;
+  lng?: number | null;
+  mobile?: string | null;
+  bank_account_name?: string | null;
+  aadhaar_number?: string | null;
+  bank_account_number?: string | null;
+  crops_grown?: string | null;
+  land_size_acres?: string | null;
 };
 
 type DbShopRow = {
@@ -104,9 +116,10 @@ type DbCmsPageRow = {
   updated_at: string;
 };
 
-function normalizeStatus(status: string | null | undefined): 'active' | 'suspended' | 'pending_kyc' {
+function normalizeStatus(status: string | null | undefined): 'active' | 'suspended' | 'pending_kyc' | 'needs_onboarding' {
   if (status === 'suspended' || status === 'blocked') return 'suspended';
   if (status === 'pending_kyc') return 'pending_kyc';
+  if (status === 'needs_onboarding') return 'needs_onboarding';
   return 'active';
 }
 
@@ -196,6 +209,11 @@ export async function ensureTablesReady() {
       content TEXT NOT NULL,
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
+    CREATE TABLE IF NOT EXISTS site_config (
+      key VARCHAR(120) PRIMARY KEY,
+      value TEXT
+    );
+
     CREATE TABLE IF NOT EXISTS shops (
       id VARCHAR(64) PRIMARY KEY,
       name VARCHAR(120) NOT NULL,
@@ -210,6 +228,18 @@ export async function ensureTablesReady() {
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
     ALTER TABLE kyc_submissions ADD COLUMN IF NOT EXISTS documents TEXT[] DEFAULT '{}';
+    ALTER TABLE kyc_submissions ADD COLUMN IF NOT EXISTS details JSONB DEFAULT '{}'::jsonb;
+    ALTER TABLE kyc_submissions ADD COLUMN IF NOT EXISTS mandal VARCHAR(100);
+    ALTER TABLE kyc_submissions ADD COLUMN IF NOT EXISTS state VARCHAR(100);
+    ALTER TABLE kyc_submissions ADD COLUMN IF NOT EXISTS pincode VARCHAR(20);
+    ALTER TABLE kyc_submissions ADD COLUMN IF NOT EXISTS lat DOUBLE PRECISION;
+    ALTER TABLE kyc_submissions ADD COLUMN IF NOT EXISTS lng DOUBLE PRECISION;
+    ALTER TABLE kyc_submissions ADD COLUMN IF NOT EXISTS mobile VARCHAR(20);
+    ALTER TABLE kyc_submissions ADD COLUMN IF NOT EXISTS bank_account_name VARCHAR(120);
+    ALTER TABLE kyc_submissions ADD COLUMN IF NOT EXISTS aadhaar_number VARCHAR(20);
+    ALTER TABLE kyc_submissions ADD COLUMN IF NOT EXISTS bank_account_number VARCHAR(30);
+    ALTER TABLE kyc_submissions ADD COLUMN IF NOT EXISTS crops_grown TEXT;
+    ALTER TABLE kyc_submissions ADD COLUMN IF NOT EXISTS land_size_acres VARCHAR(40);
     ALTER TABLE products ADD COLUMN IF NOT EXISTS shop_id VARCHAR(64);
     ALTER TABLE users ADD COLUMN IF NOT EXISTS pin_hash TEXT;
   `);
@@ -267,6 +297,11 @@ export async function upsertUser(input: {
 
 export async function findUserByMobile(mobile: string) {
   const res = await query<DbUserRow>('SELECT * FROM users WHERE mobile = $1 LIMIT 1', [mobile]);
+  return res.rows[0] ?? null;
+}
+
+export async function findUserByMobileAndRole(mobile: string, role: string) {
+  const res = await query<DbUserRow>('SELECT * FROM users WHERE mobile = $1 AND role = $2 LIMIT 1', [mobile, role]);
   return res.rows[0] ?? null;
 }
 
@@ -488,13 +523,14 @@ export function deriveUserStatusFromKyc(
   role: string,
   userStatus: string,
   kycStatus?: string | null,
-): 'active' | 'suspended' | 'pending_kyc' {
+): 'active' | 'suspended' | 'pending_kyc' | 'needs_onboarding' {
   if (role !== 'farmer' && role !== 'b2b') {
     return userStatus === 'suspended' ? 'suspended' : 'active';
   }
   if (kycStatus === 'pending' || kycStatus === 'reupload_requested') return 'pending_kyc';
   if (kycStatus === 'rejected') return 'suspended';
   if (kycStatus === 'approved') return 'active';
+  if (userStatus === 'needs_onboarding') return 'needs_onboarding';
   return userStatus === 'pending_kyc' ? 'pending_kyc' : userStatus === 'suspended' ? 'suspended' : 'active';
 }
 
@@ -518,11 +554,37 @@ export async function upsertKyc(input: {
   status?: string;
   bankVerified?: boolean;
   documents?: string[];
+  details?: Record<string, unknown> | null;
+  mandal?: string | null;
+  state?: string | null;
+  pincode?: string | null;
+  lat?: number | string | null;
+  lng?: number | string | null;
+  mobile?: string | null;
+  bankAccountName?: string | null;
+  aadhaarNumber?: string | null;
+  bankAccountNumber?: string | null;
+  cropsGrown?: string | null;
+  landSizeAcres?: string | number | null;
 }) {
+  const toNum = (value: number | string | null | undefined) => {
+    if (value === null || value === undefined || value === '') return null;
+    const n = Number(value);
+    return Number.isFinite(n) ? n : null;
+  };
+
   await query(
     `
-      INSERT INTO kyc_submissions (id, user_id, name, role, village, district, gstin, aadhaar_masked, bank_account_masked, ifsc, status, bank_verified, documents)
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
+      INSERT INTO kyc_submissions (
+        id, user_id, name, role, village, district, gstin, aadhaar_masked, bank_account_masked, ifsc,
+        status, bank_verified, documents, details, mandal, state, pincode, lat, lng, mobile,
+        bank_account_name, aadhaar_number, bank_account_number, crops_grown, land_size_acres
+      )
+      VALUES (
+        $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,
+        $11,$12,$13,$14::jsonb,$15,$16,$17,$18,$19,$20,
+        $21,$22,$23,$24,$25
+      )
       ON CONFLICT (id) DO UPDATE SET
         user_id = EXCLUDED.user_id,
         name = EXCLUDED.name,
@@ -535,7 +597,20 @@ export async function upsertKyc(input: {
         ifsc = EXCLUDED.ifsc,
         status = EXCLUDED.status,
         bank_verified = EXCLUDED.bank_verified,
-        documents = EXCLUDED.documents
+        documents = EXCLUDED.documents,
+        details = EXCLUDED.details,
+        mandal = EXCLUDED.mandal,
+        state = EXCLUDED.state,
+        pincode = EXCLUDED.pincode,
+        lat = EXCLUDED.lat,
+        lng = EXCLUDED.lng,
+        mobile = EXCLUDED.mobile,
+        bank_account_name = EXCLUDED.bank_account_name,
+        aadhaar_number = EXCLUDED.aadhaar_number,
+        bank_account_number = EXCLUDED.bank_account_number,
+        crops_grown = EXCLUDED.crops_grown,
+        land_size_acres = EXCLUDED.land_size_acres,
+        submitted_at = NOW()
     `,
     [
       input.id,
@@ -551,6 +626,18 @@ export async function upsertKyc(input: {
       input.status ?? 'pending',
       input.bankVerified ?? false,
       input.documents ?? [],
+      JSON.stringify(input.details ?? {}),
+      input.mandal ?? null,
+      input.state ?? null,
+      input.pincode ?? null,
+      toNum(input.lat),
+      toNum(input.lng),
+      input.mobile ?? null,
+      input.bankAccountName ?? null,
+      input.aadhaarNumber ?? null,
+      input.bankAccountNumber ?? null,
+      input.cropsGrown ?? null,
+      input.landSizeAcres != null && input.landSizeAcres !== '' ? String(input.landSizeAcres) : null,
     ],
   );
 }
@@ -766,6 +853,7 @@ export function toStoreProduct(row: DbProductRow) {
 }
 
 export function toStoreKyc(row: DbKycRow) {
+  const details = (row.details && typeof row.details === 'object' ? row.details : {}) as Record<string, unknown>;
   return {
     id: row.id,
     userId: row.user_id,
@@ -781,6 +869,18 @@ export function toStoreKyc(row: DbKycRow) {
     bankVerified: row.bank_verified,
     submittedAt: row.submitted_at || '',
     documents: row.documents ?? [],
+    details,
+    mandal: row.mandal ?? (details.mandal as string) ?? undefined,
+    state: row.state ?? (details.state as string) ?? undefined,
+    pincode: row.pincode ?? (details.pincode as string) ?? undefined,
+    lat: row.lat != null ? String(row.lat) : ((details.lat as string) ?? undefined),
+    lng: row.lng != null ? String(row.lng) : ((details.lng as string) ?? undefined),
+    mobile: row.mobile ?? (details.mobile as string) ?? undefined,
+    bankAccountName: row.bank_account_name ?? (details.bankAccountName as string) ?? undefined,
+    aadhaarNumber: row.aadhaar_number ?? (details.aadhaarNumber as string) ?? undefined,
+    bankAccountNumber: row.bank_account_number ?? (details.bankAccountNumber as string) ?? undefined,
+    cropsGrown: row.crops_grown ?? (details.cropsGrown as string) ?? undefined,
+    landSizeAcres: row.land_size_acres ?? (details.landSizeAcres as string) ?? undefined,
   } as const;
 }
 
@@ -797,6 +897,40 @@ export function toStoreShop(row: DbShopRow) {
     location: { lat: row.lat ?? 0, lng: row.lng ?? 0 },
   } as const;
 }
+
+export async function getSiteConfig(): Promise<{ mapLat: number; mapLng: number; mapAddress: string }> {
+  const res = await query<{ key: string; value: string }>(
+    `SELECT key, value FROM site_config WHERE key IN ('mapLat','mapLng','mapAddress')`
+  );
+  const map: Record<string, string> = {};
+  for (const row of res.rows) {
+    map[row.key] = row.value;
+  }
+  return {
+    mapLat: map.mapLat ? Number(map.mapLat) : 16.5062,
+    mapLng: map.mapLng ? Number(map.mapLng) : 80.6480,
+    mapAddress: map.mapAddress ?? 'Vijayawada, Andhra Pradesh',
+  };
+}
+
+export async function updateSiteConfig(input: { mapLat?: number; mapLng?: number; mapAddress?: string }) {
+  const rows: Array<[string, string]> = [];
+  if (input.mapLat != null) rows.push(['mapLat', String(input.mapLat)]);
+  if (input.mapLng != null) rows.push(['mapLng', String(input.mapLng)]);
+  if (input.mapAddress != null) rows.push(['mapAddress', input.mapAddress]);
+  for (const [key, value] of rows) {
+    await query(
+      `INSERT INTO site_config (key, value) VALUES ($1, $2)
+       ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`,
+      [key, value]
+    );
+    // keep in-memory store in sync
+    if (key === 'mapLat') db.mapLat = Number(value);
+    else if (key === 'mapLng') db.mapLng = Number(value);
+    else if (key === 'mapAddress') db.mapAddress = value;
+  }
+}
+
 
 export async function countRows(table: string) {
   const res = await query<{ count: string }>(`SELECT COUNT(*)::text AS count FROM ${table}`);
@@ -931,7 +1065,7 @@ export async function seedFromMemoryIfEmpty() {
       }
     }
 
-    const cmsCount = await countRows('cms_pages');
+        const cmsCount = await countRows('cms_pages');
     if (cmsCount === 0) {
       for (const page of db.cmsPages) {
         await upsertCmsPage({
@@ -939,6 +1073,31 @@ export async function seedFromMemoryIfEmpty() {
           title: page.title,
           content: page.content,
         });
+      }
+    }
+
+        // Seed default site config (map fields)
+    const cfgExisting = await query<{ key: string; value: string }>(
+      `SELECT key, value FROM site_config WHERE key IN ('mapLat','mapLng','mapAddress')`
+    );
+    const cfgExistingKeys = new Set(cfgExisting.rows.map((r) => r.key));
+    const defaults: Array<{ key: string; value: string }> = [
+      { key: 'mapLat', value: String(db.mapLat ?? 16.5062) },
+      { key: 'mapLng', value: String(db.mapLng ?? 80.6480) },
+      { key: 'mapAddress', value: db.mapAddress ?? 'Vijayawada, Andhra Pradesh' },
+    ];
+    for (const d of defaults) {
+      if (!cfgExistingKeys.has(d.key)) {
+        await query(`INSERT INTO site_config (key, value) VALUES ($1, $2)`, [d.key, d.value]);
+      }
+    }
+
+    // Keep in-memory store in sync with persisted values
+    if (cfgExisting.rows.length) {
+      for (const row of cfgExisting.rows) {
+        if (row.key === 'mapLat') db.mapLat = Number(row.value);
+        else if (row.key === 'mapLng') db.mapLng = Number(row.value);
+        else if (row.key === 'mapAddress') db.mapAddress = row.value;
       }
     }
   } catch {
