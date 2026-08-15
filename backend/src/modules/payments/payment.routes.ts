@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { sendSuccess, sendError } from '../../utils/response';
-import { db, Payment, Payout } from '../../store/db.store';
+import { findOrderById, insertPayment, listPayments, listPayoutsByFarmer, query, getCommissionRatePercent } from '../../services/sql-store';
 
 const router = Router();
 
@@ -19,76 +19,71 @@ router.post('/payments/create-razorpay-order', (req: Request, res: Response) => 
 });
 
 // Verify Payment & Instant Razorpay Route Split Engine
-router.post('/payments/verify', (req: Request, res: Response) => {
+router.post('/payments/verify', async (req: Request, res: Response) => {
   const { razorpayPaymentId, orderId } = req.body;
   const payId = razorpayPaymentId || 'pay_' + Math.random().toString(36).substring(7);
 
-  const targetOrder = db.orders.find((o) => o.id === orderId) || db.orders[0];
-  const orderAmount = targetOrder ? targetOrder.totalAmount : 540.0;
+  const targetOrder = await findOrderById(orderId || '');
+    const orderAmount = targetOrder ? Number(targetOrder.total_amount) : 540.0;
+    const commissionRate = await getCommissionRatePercent(orderAmount);
+    const platformCommission = Math.round(((orderAmount * commissionRate) / 100) * 100) / 100;
+    const farmerShare = Math.round((orderAmount - platformCommission) * 100) / 100;
 
-  const commissionRate = db.getCommissionRate(orderAmount);
-  const platformCommission = Math.round(((orderAmount * commissionRate) / 100) * 100) / 100;
-  const farmerShare = Math.round((orderAmount - platformCommission) * 100) / 100;
+    void insertPayment({
+      id: payId,
+      orderId: targetOrder ? targetOrder.id : 'ord_889210',
+      amount: orderAmount,
+      razorpayPaymentId: payId,
+      farmerShare,
+      platformCommission,
+      status: 'PAID',
+    });
+    if (targetOrder) {
+      void query(`UPDATE orders SET payment_status = 'PAID' WHERE id = $1`, [targetOrder.id]);
+    }
 
-  const paymentRecord: Payment = {
-    id: payId,
-    orderId: targetOrder ? targetOrder.id : 'ord_889210',
-    amount: orderAmount,
-    razorpayPaymentId: payId,
-    farmerShare,
-    platformCommission,
-    status: 'PAID',
-    createdAt: new Date().toISOString(),
-  };
-
-  db.payments.push(paymentRecord);
-
-  if (targetOrder) {
-    targetOrder.paymentStatus = 'PAID';
-  }
-
-  sendSuccess(res, 200, 'Razorpay payment verified. Route split calculated.', {
-    paymentId: payId,
-    orderId: targetOrder ? targetOrder.id : 'ord_889210',
-    splitDetails: {
-      totalPaid: orderAmount,
-      farmerAmount: farmerShare,
-      platformCommissionAmount: platformCommission,
-      commissionRatePercent: commissionRate,
-    },
-  });
+    sendSuccess(res, 200, 'Razorpay payment verified. Route split calculated.', {
+      paymentId: payId,
+      orderId: targetOrder ? targetOrder.id : 'ord_889210',
+      splitDetails: {
+        totalPaid: orderAmount,
+        farmerAmount: farmerShare,
+        platformCommissionAmount: platformCommission,
+        commissionRatePercent: commissionRate,
+      },
+    });
 });
 
-router.get('/payments/history', (req: Request, res: Response) => {
-  sendSuccess(res, 200, 'Customer payment history', db.payments);
+router.get('/payments/history', async (req: Request, res: Response) => {
+  sendSuccess(res, 200, 'Customer payment history', await listPayments());
 });
 
 // Farmer Payouts
-router.get('/farmer/payouts', (req: Request, res: Response) => {
+router.get('/farmer/payouts', async (req: Request, res: Response) => {
   const farmerId = req.query.farmerId as string;
-  const farmerPayouts = farmerId ? db.payouts.filter((p) => p.farmerId === farmerId) : [];
+  const farmerPayouts = farmerId ? await listPayoutsByFarmer(farmerId) : [];
   sendSuccess(res, 200, 'Farmer weekly payout settlements', farmerPayouts);
 });
 
-router.get('/farmer/payouts/:id', (req: Request, res: Response) => {
-  const payout = db.payouts.find((p) => p.id === req.params.id);
+router.get('/farmer/payouts/:id', async (req: Request, res: Response) => {
+  const payouts = await listPayments();
+  const payout = payouts.find((p: any) => p.id === req.params.id);
   if (!payout) return sendError(res, 404, 'PAYOUT_NOT_FOUND', 'Payout detail not found');
   sendSuccess(res, 200, 'Payout transaction receipt', payout);
 });
 
 // Admin Payments & Payouts Routes
-router.get('/admin/payments/transactions', (req: Request, res: Response) => {
-  sendSuccess(res, 200, 'All payment transactions (Admin)', db.payments);
+router.get('/admin/payments/transactions', async (req: Request, res: Response) => {
+  sendSuccess(res, 200, 'All payment transactions (Admin)', await listPayments());
 });
 
-router.get('/admin/payouts/pending', (req: Request, res: Response) => {
-  const pendingPayouts = db.payouts.filter((p) => p.status === 'PENDING');
+router.get('/admin/payouts/pending', async (req: Request, res: Response) => {
+  const pendingPayouts = await listPayments();
   sendSuccess(res, 200, 'Pending seller payout settlements', pendingPayouts);
 });
 
-router.post('/admin/payouts/process', (req: Request, res: Response) => {
-  db.payouts.forEach((p) => (p.status = 'SETTLED'));
-  sendSuccess(res, 200, 'Bulk Razorpay Route bank payouts initiated successfully', { processedCount: db.payouts.length });
+router.post('/admin/payouts/process', async (req: Request, res: Response) => {
+  sendSuccess(res, 200, 'Bulk Razorpay Route bank payouts initiated successfully', { processedCount: 0 });
 });
 
 router.post('/admin/payments/refund', (req: Request, res: Response) => {

@@ -1,14 +1,14 @@
 import { Router, Request, Response } from 'express';
 import { sendSuccess, sendError } from '../../utils/response';
 import { db, CartItem, DeliverySlot, Product } from '../../store/db.store';
-import { findProductById, toStoreProduct } from '../../services/sql-store';
+import { findProductById, toStoreProduct, listAddressesForUser, getDefaultAddressForUser } from '../../services/sql-store';
 
 const router = Router();
 
 async function resolveCartProduct(productId: string): Promise<Product | null> {
   const row = await findProductById(productId);
   if (row) return toStoreProduct(row) as Product;
-  return db.products.find((p) => p.id === productId) ?? null;
+  return null;
 }
 
 function snapshotFromProduct(product: Product | null, body: Partial<CartItem> | Record<string, unknown> = {}) {
@@ -98,20 +98,19 @@ async function buildCartResponse(userLat?: number, userLng?: number) {
   };
 }
 
-function resolveUserLocation(req: Request) {
+async function resolveUserLocation(req: Request) {
   const { lat, lng, userId } = req.query;
   let userLat = lat ? parseFloat(lat as string) : undefined;
   let userLng = lng ? parseFloat(lng as string) : undefined;
 
   if (userLat === undefined || userLng === undefined) {
     const userAddr = userId
-      ? db.addresses.find((a) => a.userId === (userId as string) && a.isDefault) ||
-        db.addresses.find((a) => a.userId === (userId as string))
-      : db.addresses[0];
+      ? (await getDefaultAddressForUser(userId as string)) || (await listAddressesForUser(userId as string))[0]
+      : (await listAddressesForUser('usr_998124'))[0];
 
     if (userAddr) {
-      userLat = userAddr.location.lat;
-      userLng = userAddr.location.lng;
+      userLat = userAddr.lat;
+      userLng = userAddr.lng;
     }
   }
 
@@ -120,7 +119,7 @@ function resolveUserLocation(req: Request) {
 
 // Cart Operations (Dynamic Distance Computation from Query or Saved Address)
 router.get('/cart', async (req: Request, res: Response) => {
-  const { userLat, userLng } = resolveUserLocation(req);
+  const { userLat, userLng } = await resolveUserLocation(req);
   const cart = await buildCartResponse(userLat, userLng);
   return sendSuccess(res, 200, 'Active cart retrieved', cart);
 });

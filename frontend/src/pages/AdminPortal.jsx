@@ -525,14 +525,17 @@ function UserManager() {
     applyPinStatus(userId, true);
   };
 
-    const searchB2bLocation = async () => {
-    if (!editing?.address?.trim()) {
-      setFormError('Please enter a business address to search.');
+    const searchEditingLocation = async () => {
+    const query = editing?.role === 'farmer'
+      ? [editing.village, editing.mandal, editing.district, editing.state, editing.pincode].filter(Boolean).join(', ')
+      : editing?.address;
+    if (!query?.trim()) {
+      setFormError(editing?.role === 'farmer' ? 'Please enter farm location details to search.' : 'Please enter a business address to search.');
       return;
     }
     setFormError('');
     try {
-      const encoded = encodeURIComponent(editing.address);
+      const encoded = encodeURIComponent(query);
       const response = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encoded}`, {
         headers: { 'User-Agent': 'Aswamithra-Admin' },
       });
@@ -543,7 +546,7 @@ function UserManager() {
           ...editing,
           lat: first.lat,
           lng: first.lon,
-          address: first.display_name || editing.address,
+          ...(editing.role === 'farmer' ? {} : { address: first.display_name || editing.address }),
         });
       } else {
         setFormError('No results found for the given address.');
@@ -792,8 +795,47 @@ function UserManager() {
                     <FormField label="District" name="district" value={editing.district || ''} onChange={(e) => setEditing({ ...editing, district: e.target.value })} />
                     <FormField label="State" name="state" value={editing.state || ''} onChange={(e) => setEditing({ ...editing, state: e.target.value })} />
                     <FormField label="Pincode" name="pincode" value={editing.pincode || ''} onChange={(e) => setEditing({ ...editing, pincode: e.target.value })} />
+                    <div className="w-full">
+                      <label className="field-label" style={{ fontSize: 13, fontWeight: 600, color: 'var(--ink)', display: 'block', marginBottom: 7 }}>
+                        Farm location <span style={{ color: 'var(--danger)' }}>*</span>
+                      </label>
+                      <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 w-full">
+                        <div className="field flex-1 w-full min-w-0" style={{ alignSelf: 'stretch' }}>
+                          <input
+                            type="text"
+                            value={[editing.village, editing.mandal, editing.district, editing.state, editing.pincode].filter(Boolean).join(', ')}
+                            onChange={(e) => setEditing({ ...editing, village: e.target.value })}
+                            placeholder="Search village, mandal, district, state, or pincode"
+                          />
+                        </div>
+                        <button
+                          type="button"
+                          onClick={searchEditingLocation}
+                          className="w-full sm:w-auto px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-md transition-all text-sm shadow-sm flex items-center justify-center gap-2 shrink-0 cursor-pointer"
+                          style={{ height: 48 }}
+                        >
+                          <Search size={16} />
+                          <span>Search Location</span>
+                        </button>
+                      </div>
+                    </div>
                     <FormField label="Farm latitude" name="lat" type="number" value={editing.lat || ''} onChange={(e) => setEditing({ ...editing, lat: e.target.value })} />
                     <FormField label="Farm longitude" name="lng" type="number" value={editing.lng || ''} onChange={(e) => setEditing({ ...editing, lng: e.target.value })} />
+                    {editing.lat && editing.lng ? (
+                      <div className="landing-map-wrapper" style={{ marginTop: '8px' }}>
+                        <iframe
+                          title="Farm Map Preview"
+                          width="100%"
+                          height="200"
+                          frameBorder="0"
+                          scrolling="no"
+                          marginHeight={0}
+                          marginWidth={0}
+                          src={`https://www.openstreetmap.org/export/embed.html?bbox=${Number(editing.lng) - 0.005},${Number(editing.lat) - 0.005},${Number(editing.lng) + 0.005},${Number(editing.lat) + 0.005}&layer=mapnik&marker=${editing.lat},${editing.lng}`}
+                          style={{ border: 0, borderRadius: '8px' }}
+                        />
+                      </div>
+                    ) : null}
                     <FormField label="Aadhaar number" name="aadhaarNumber" value={editing.aadhaarNumber || ''} onChange={(e) => setEditing({ ...editing, aadhaarNumber: e.target.value })} />
                     <ImageUploadField
                       label="Aadhaar document"
@@ -841,7 +883,7 @@ function UserManager() {
                         </div>
                         <button
                           type="button"
-                          onClick={searchB2bLocation}
+                          onClick={searchEditingLocation}
                           className="w-full sm:w-auto px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-md transition-all text-sm shadow-sm flex items-center justify-center gap-2 shrink-0 cursor-pointer"
                           style={{ height: 48 }}
                         >
@@ -930,6 +972,173 @@ function ShopManager() {
   );
 }
 
+function FinanceManager() {
+  const { data: transactions, setData: setTransactions } = useApi(() => endpoints.finance(), [], []);
+  const { data: summary, setData: setSummary } = useApi(() => endpoints.financeSummary(), { platformCommissionRevenue: 0, totalGmvAmount: 0, totalOrdersCount: 0 }, []);
+  const { data: commissionSettings, setData: setCommissionSettings } = useApi(() => endpoints.commissionSettings(), { commissionRatePercent: 4.5 }, []);
+  const [editingRate, setEditingRate] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    setEditingRate(String(commissionSettings?.commissionRatePercent ?? 4.5));
+  }, [commissionSettings]);
+
+  const refresh = async () => {
+    setTransactions(unwrap(await endpoints.finance()));
+    setSummary(unwrap(await endpoints.financeSummary()));
+    setCommissionSettings(unwrap(await endpoints.commissionSettings()));
+  };
+
+  const saveRate = async () => {
+    setSaving(true);
+    try {
+      await endpoints.updateCommissionSettings({ commissionRatePercent: Number(editingRate) || 4.5 });
+      await refresh();
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const rows = Array.isArray(transactions) ? transactions : transactions?.items || [];
+  const earned = Number(summary?.platformCommissionRevenue || 0);
+
+  return (
+    <>
+      <section className="panel">
+        <div className="panel-head-row">
+          <h2>Commission settings</h2>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <StatCard label="Admin earnings" value={money(earned)} icon={Landmark} tone="dark" />
+          <StatCard label="Total orders" value={summary?.totalOrdersCount || 0} icon={ReceiptIndianRupee} tone="dark" />
+          <StatCard label="GMV" value={money(summary?.totalGmvAmount || 0)} icon={BarChart3} tone="dark" />
+        </div>
+        <div style={{ marginTop: 16 }} className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <FormField
+            label="Commission percentage"
+            name="commissionRatePercent"
+            type="number"
+            step="0.1"
+            value={editingRate}
+            onChange={(e) => setEditingRate(e.target.value)}
+          />
+          <div style={{ alignSelf: 'end' }} className="modal-actions">
+            <button className="btn btn-primary" type="button" onClick={saveRate} disabled={saving}>
+              {saving ? 'Saving...' : 'Save commission'}
+            </button>
+          </div>
+        </div>
+        <p className="muted" style={{ marginTop: 8 }}>
+          This percentage is used for new orders and payments. Platform commission is stored in the database and shown below.
+        </p>
+      </section>
+
+      <ManageList
+        title="Finance transactions"
+        loader={() => endpoints.finance()}
+        fallback={[]}
+        columns={[
+          { key: 'id', label: 'Payment' },
+          { key: 'amount', label: 'Amount', render: (row) => money(row.amount) },
+          { key: 'platformCommission', label: 'Commission', render: (row) => money(row.platformCommission) },
+          { key: 'status', label: 'Status' },
+        ]}
+        detailRenderer={(item, close) => (
+          <>
+            <div className="modal-head">
+              <h2>Payment details</h2>
+              <button className="icon-only" onClick={close}><X size={18} /></button>
+            </div>
+            <div className="detail-grid">
+              <div><span>Payment</span><strong>{item.id}</strong></div>
+              <div><span>Order</span><strong>{item.orderId}</strong></div>
+              <div><span>Amount</span><strong>{money(item.amount)}</strong></div>
+              <div><span>Commission</span><strong>{money(item.platformCommission)}</strong></div>
+              <div><span>Status</span><strong>{item.status}</strong></div>
+            </div>
+            <div className="modal-actions">
+              <button className="btn btn-primary" onClick={async () => { await endpoints.refundPayment({ orderId: item.orderId, amount: item.amount }); close(); }}>
+                Refund
+              </button>
+            </div>
+          </>
+        )}
+        extraActions={() => <button className="btn btn-light" onClick={async () => { await endpoints.processPayouts(); await refresh(); }}>Process payouts</button>}
+      />
+    </>
+  );
+}
+
+function CommissionManager() {
+  const { data: slabs, setData: setSlabs } = useApi(() => endpoints.commissions(), [], []);
+  const { data: commissionSettings, setData: setCommissionSettings } = useApi(() => endpoints.commissionSettings(), { commissionRatePercent: 4.5 }, []);
+  const [rate, setRate] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    setRate(String(commissionSettings?.commissionRatePercent ?? 4.5));
+  }, [commissionSettings]);
+
+  const refresh = async () => {
+    setSlabs(unwrap(await endpoints.commissions()));
+    setCommissionSettings(unwrap(await endpoints.commissionSettings()));
+  };
+
+  const saveRate = async () => {
+    setSaving(true);
+    try {
+      await endpoints.updateCommissionSettings({ commissionRatePercent: Number(rate) || 4.5 });
+      await refresh();
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const rows = Array.isArray(slabs) ? slabs : [];
+
+  return (
+    <>
+      <section className="panel">
+        <h2>Commission rate</h2>
+        <p className="muted">This is the live platform commission used for new orders and payments.</p>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <StatCard label="Current commission %" value={`${rate || commissionSettings?.commissionRatePercent || 4.5}%`} icon={ReceiptIndianRupee} tone="dark" />
+          <FormField
+            label="Change commission %"
+            name="commissionRatePercent"
+            type="number"
+            step="0.1"
+            value={rate}
+            onChange={(e) => setRate(e.target.value)}
+          />
+          <div style={{ alignSelf: 'end' }} className="modal-actions">
+            <button className="btn btn-primary" type="button" onClick={saveRate} disabled={saving}>
+              {saving ? 'Saving...' : 'Save rate'}
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <section className="panel">
+        <h2>Commission slabs</h2>
+        {rows.length ? (
+          <DataTable
+            rows={rows}
+            columns={[
+              { key: 'minAmount', label: 'Min', render: (row) => money(row.minAmount) },
+              { key: 'maxAmount', label: 'Max', render: (row) => money(row.maxAmount) },
+              { key: 'ratePercent', label: 'Rate %' },
+              { key: 'applicableRegion', label: 'Region' },
+            ]}
+          />
+        ) : (
+          <div className="notice">No slab records yet. The live commission rate is the value above.</div>
+        )}
+      </section>
+    </>
+  );
+}
+
 function AdminTable({ title, loader, fallback, columns }) {
   const { data } = useApi(loader, fallback, []);
   return <section className="panel"><h2>{title}</h2><DataTable rows={Array.isArray(data) ? data : data?.items || []} columns={columns} /></section>;
@@ -983,7 +1192,7 @@ export default function AdminPortal() {
         <Route path="/admin/home" component={AdminHome} />
         <Route path="/admin/kyc" component={KycQueue} />
         <Route path="/admin/users" component={UserManager} />
-        <Route path="/admin/commissions" render={() => <AdminTable title="Commission slabs" loader={() => endpoints.commissions()} fallback={[]} columns={[{ key: 'minAmount', label: 'Min', render: (row) => money(row.minAmount) }, { key: 'maxAmount', label: 'Max', render: (row) => money(row.maxAmount) }, { key: 'ratePercent', label: 'Rate %' }, { key: 'applicableRegion', label: 'Region' }]} />} />
+        <Route path="/admin/commissions" component={CommissionManager} />
         <Route path="/admin/categories" render={() => (
           <ManageList
             title="Product categories"
@@ -1020,7 +1229,7 @@ export default function AdminPortal() {
           />
         )} />
         <Route path="/admin/shops" component={ShopManager} />
-        <Route path="/admin/finance" render={() => <ManageList title="Finance transactions" loader={() => endpoints.finance()} fallback={[]} columns={[{ key: 'id', label: 'Payment' }, { key: 'amount', label: 'Amount', render: (row) => money(row.amount) }, { key: 'platformCommission', label: 'Commission', render: (row) => money(row.platformCommission) }, { key: 'status', label: 'Status' }]} detailRenderer={(item, close) => (<><div className="modal-head"><h2>Payment details</h2><button className="icon-only" onClick={close}><X size={18} /></button></div><div className="detail-grid"><div><span>Payment</span><strong>{item.id}</strong></div><div><span>Order</span><strong>{item.orderId}</strong></div><div><span>Amount</span><strong>{money(item.amount)}</strong></div><div><span>Commission</span><strong>{money(item.platformCommission)}</strong></div><div><span>Status</span><strong>{item.status}</strong></div></div><div className="modal-actions"><button className="btn btn-primary" onClick={async () => { await endpoints.refundPayment({ orderId: item.orderId, amount: item.amount }); close(); }}>Refund</button></div></>)} extraActions={(row) => <button className="btn btn-light" onClick={async () => { await endpoints.processPayouts(); }}>Process payouts</button>} />} />
+        <Route path="/admin/finance" component={FinanceManager} />
         <Route path="/admin/cms" render={() => (
           <ManageList
             title="CMS banners"

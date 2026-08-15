@@ -1,13 +1,12 @@
 import { Router, Request, Response } from 'express';
 import { sendSuccess, sendError } from '../../utils/response';
-import { db, ServiceLocation } from '../../store/db.store';
+import { query } from '../../config/db.config';
 
 const router = Router();
 
-// Geo Service Locations Public & Admin
-router.get('/geo/service-locations', (req: Request, res: Response) => {
-  const activeLocations = db.serviceLocations.filter((l) => l.status === 'active');
-  sendSuccess(res, 200, 'Operational service districts & cities', activeLocations);
+router.get('/geo/service-locations', async (_req: Request, res: Response) => {
+  const result = await query("SELECT * FROM service_locations WHERE status = 'active' ORDER BY state ASC, district ASC, city ASC");
+  sendSuccess(res, 200, 'Operational service districts & cities', result.rows);
 });
 
 router.get('/geo/pincode-check', (req: Request, res: Response) => {
@@ -23,45 +22,77 @@ router.get('/geo/pincode-check', (req: Request, res: Response) => {
   });
 });
 
-// Admin Geo Service Locations (Supporting both /admin/geo/service-locations and /admin/service-locations)
-const getAdminLocations = (req: Request, res: Response) => {
-  sendSuccess(res, 200, 'All service locations (Admin)', db.serviceLocations);
+const getAdminLocations = async (_req: Request, res: Response) => {
+  const result = await query('SELECT * FROM service_locations ORDER BY state ASC, district ASC, city ASC');
+  sendSuccess(res, 200, 'All service locations (Admin)', result.rows);
 };
 
-const postAdminLocation = (req: Request, res: Response) => {
-  const newLoc: ServiceLocation = {
+const postAdminLocation = async (req: Request, res: Response) => {
+  const newLoc = {
     id: 'loc_' + Date.now(),
     state: req.body.state || 'Andhra Pradesh',
     district: req.body.district || 'Guntur',
     city: req.body.city || 'Guntur',
-    status: 'active',
+    status: req.body.status || 'active',
+    lat: req.body.lat ?? null,
+    lng: req.body.lng ?? null,
+    activeFarmers: req.body.activeFarmers ?? null,
+    activeHubs: req.body.activeHubs ?? null,
   };
-  db.serviceLocations.push(newLoc);
+  await query(
+    'INSERT INTO service_locations (id, state, district, city, status, lat, lng, active_farmers, active_hubs) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)',
+    [newLoc.id, newLoc.state, newLoc.district, newLoc.city, newLoc.status, newLoc.lat, newLoc.lng, newLoc.activeFarmers, newLoc.activeHubs],
+  );
   sendSuccess(res, 201, 'Service location created', newLoc);
 };
 
 router.get('/admin/geo/service-locations', getAdminLocations);
 router.get('/admin/service-locations', getAdminLocations);
-
 router.post('/admin/geo/service-locations', postAdminLocation);
 router.post('/admin/service-locations', postAdminLocation);
 
-router.put('/admin/geo/service-locations/:id', (req: Request, res: Response) => {
-  const loc = db.serviceLocations.find((l) => l.id === req.params.id);
-  if (!loc) return sendError(res, 404, 'LOCATION_NOT_FOUND', 'Service location not found');
-  Object.assign(loc, req.body);
-  sendSuccess(res, 200, 'Service location updated', loc);
-});
-router.put('/admin/service-locations/:id', (req: Request, res: Response) => {
-  const loc = db.serviceLocations.find((l) => l.id === req.params.id);
-  if (!loc) return sendError(res, 404, 'LOCATION_NOT_FOUND', 'Service location not found');
-  Object.assign(loc, req.body);
-  sendSuccess(res, 200, 'Service location updated', loc);
+router.put('/admin/geo/service-locations/:id', async (req: Request, res: Response) => {
+  const result = await query('SELECT * FROM service_locations WHERE id = $1 LIMIT 1', [req.params.id]);
+  if (!result.rows[0]) return sendError(res, 404, 'LOCATION_NOT_FOUND', 'Service location not found');
+  await query(
+    'UPDATE service_locations SET state = $1, district = $2, city = $3, status = $4, lat = $5, lng = $6, active_farmers = $7, active_hubs = $8 WHERE id = $9',
+    [
+      req.body.state ?? result.rows[0].state,
+      req.body.district ?? result.rows[0].district,
+      req.body.city ?? result.rows[0].city,
+      req.body.status ?? result.rows[0].status,
+      req.body.lat ?? result.rows[0].lat,
+      req.body.lng ?? result.rows[0].lng,
+      req.body.activeFarmers ?? result.rows[0].active_farmers,
+      req.body.activeHubs ?? result.rows[0].active_hubs,
+      req.params.id,
+    ],
+  );
+  sendSuccess(res, 200, 'Service location updated', { id: req.params.id });
 });
 
-router.delete('/admin/geo/service-locations/:id', (req: Request, res: Response) => {
-  const index = db.serviceLocations.findIndex((l) => l.id === req.params.id);
-  if (index !== -1) db.serviceLocations.splice(index, 1);
+router.put('/admin/service-locations/:id', async (req: Request, res: Response) => {
+  const result = await query('SELECT * FROM service_locations WHERE id = $1 LIMIT 1', [req.params.id]);
+  if (!result.rows[0]) return sendError(res, 404, 'LOCATION_NOT_FOUND', 'Service location not found');
+  await query(
+    'UPDATE service_locations SET state = $1, district = $2, city = $3, status = $4, lat = $5, lng = $6, active_farmers = $7, active_hubs = $8 WHERE id = $9',
+    [
+      req.body.state ?? result.rows[0].state,
+      req.body.district ?? result.rows[0].district,
+      req.body.city ?? result.rows[0].city,
+      req.body.status ?? result.rows[0].status,
+      req.body.lat ?? result.rows[0].lat,
+      req.body.lng ?? result.rows[0].lng,
+      req.body.activeFarmers ?? result.rows[0].active_farmers,
+      req.body.activeHubs ?? result.rows[0].active_hubs,
+      req.params.id,
+    ],
+  );
+  sendSuccess(res, 200, 'Service location updated', { id: req.params.id });
+});
+
+router.delete('/admin/geo/service-locations/:id', async (req: Request, res: Response) => {
+  await query('DELETE FROM service_locations WHERE id = $1', [req.params.id]);
   sendSuccess(res, 200, 'Service location deleted', { id: req.params.id });
 });
 

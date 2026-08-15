@@ -55,6 +55,10 @@ function firstDoc(kyc, detailsKey) {
   return cleanValue(details[detailsKey]) || cleanValue((kyc?.documents || [])[0]);
 }
 
+function addressString(parts) {
+  return parts.filter(Boolean).join(', ');
+}
+
 function mapKycToForm(kyc, role, user) {
   const d = kyc?.details || {};
   if (role === 'farmer') {
@@ -106,6 +110,8 @@ export default function OnboardingPage() {
   const [error, setError] = useState('');
   const [loadedFromKyc, setLoadedFromKyc] = useState(false);
   const [searchError, setSearchError] = useState('');
+  const [searchingLocation, setSearchingLocation] = useState(false);
+  const [locationQuery, setLocationQuery] = useState('');
 
   useEffect(() => {
     let active = true;
@@ -121,6 +127,7 @@ export default function OnboardingPage() {
       if (role === 'customer') {
         if (active) {
           setForm({ ...defaults, name: user?.name || '', mobile: user?.mobile || '' });
+          setLocationQuery('');
           setLoadingExisting(false);
         }
         return;
@@ -179,31 +186,41 @@ export default function OnboardingPage() {
     setForm((current) => ({ ...current, [event.target.name]: event.target.value }));
   };
 
-  const searchLocation = async () => {
-    if (!form.address?.trim()) {
-      setSearchError('Please enter a business address to search.');
+  const searchLocation = async (query) => {
+    const target = String(query || '').trim();
+    if (!target) {
+      setSearchError('Please enter an address to search.');
       return;
     }
     setSearchError('');
+    setSearchingLocation(true);
     try {
-      const encoded = encodeURIComponent(form.address);
+      const encoded = encodeURIComponent(target);
       const response = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encoded}`, {
         headers: { 'User-Agent': 'Aswamithra-App' },
       });
       const results = await response.json();
       if (results && results.length > 0) {
         const first = results[0];
-        setForm((current) => ({
-          ...current,
-          address: first.display_name || current.address,
-          lat: first.lat,
-          lng: first.lon,
-        }));
+        setForm((current) => {
+          const next = {
+            ...current,
+            lat: first.lat,
+            lng: first.lon,
+          };
+          if (role !== 'farmer') {
+            next.address = first.display_name || current.address;
+          }
+          return next;
+        });
+        setLocationQuery(first.display_name || target);
       } else {
         setSearchError('No results found for the given address.');
       }
     } catch (err) {
       setSearchError('Geocoding failed. Please try again.');
+    } finally {
+      setSearchingLocation(false);
     }
   };
 
@@ -271,6 +288,39 @@ export default function OnboardingPage() {
     }
   };
 
+  const customerAddressQuery = addressString([form.address, form.landmark, form.city, form.state, form.pincode]);
+  const farmerAddressQuery = addressString([form.village, form.mandal, form.district, form.state, form.pincode]);
+
+  const renderLocationSearch = (label, query, placeholder) => (
+    <div className="w-full">
+      <label className="field-label" style={{ fontSize: 13, fontWeight: 600, color: 'var(--ink)', display: 'block', marginBottom: 7 }}>
+        {label} <span style={{ color: 'var(--danger)' }}>*</span>
+      </label>
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 w-full">
+        <div className="field flex-1 w-full min-w-0" style={{ alignSelf: 'stretch' }}>
+          <input
+            type="text"
+            name="addressSearch"
+            value={query}
+            onChange={(e) => setLocationQuery(e.target.value)}
+            placeholder={placeholder}
+            required
+          />
+        </div>
+        <button
+          type="button"
+          onClick={() => searchLocation(locationQuery || query)}
+          className="w-full sm:w-auto px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-md transition-all text-sm shadow-sm flex items-center justify-center gap-2 shrink-0 cursor-pointer"
+          style={{ height: 48 }}
+          disabled={searchingLocation}
+        >
+          <Search size={16} />
+          <span>{searchingLocation ? 'Searching...' : 'Search Location'}</span>
+        </button>
+      </div>
+    </div>
+  );
+
   return (
         <main className="onboarding-screen px-4 sm:px-6 py-8">
       <section className="onboarding-card max-w-2xl mx-auto w-full">
@@ -288,7 +338,89 @@ export default function OnboardingPage() {
         {error ? <div className="notice">{error}</div> : null}
         {!loadingExisting ? (
           <form onSubmit={handleSubmit} className="form-grid w-full">
-            {role === 'b2b' ? (
+            {role === 'customer' ? (
+              <>
+                {forms[role].slice(0, 6).map(([name, label, type]) => (
+                  type === 'upload' ? null : (
+                    <FormField
+                      key={name}
+                      name={name}
+                      label={label}
+                      type={type}
+                      value={form[name] || ''}
+                      onChange={handleChange}
+                      options={name === 'language' ? ['Telugu', 'Hindi', 'English'] : undefined}
+                      required={['name', 'address', 'pincode', 'city', 'state'].includes(name)}
+                    />
+                  )
+                ))}
+                {renderLocationSearch('Delivery address', locationQuery || customerAddressQuery || form.address, 'Enter house, street, landmark, city, state, or pincode')}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 w-full">
+                  <FormField label="Latitude" name="lat" type="number" step="any" value={form.lat || defaults.lat} onChange={handleChange} required />
+                  <FormField label="Longitude" name="lng" type="number" step="any" value={form.lng || defaults.lng} onChange={handleChange} required />
+                </div>
+                {form.lat && form.lng ? (
+                  <div className="landing-map-wrapper w-full overflow-hidden rounded-lg shadow-sm" style={{ marginTop: '8px' }}>
+                    <iframe
+                      title="Customer Location Map Preview"
+                      width="100%"
+                      height="200"
+                      frameBorder="0"
+                      scrolling="no"
+                      marginHeight={0}
+                      marginWidth={0}
+                      src={`https://www.openstreetmap.org/export/embed.html?bbox=${Number(form.lng) - 0.005},${Number(form.lat) - 0.005},${Number(form.lng) + 0.005},${Number(form.lat) + 0.005}&layer=mapnik&marker=${form.lat},${form.lng}`}
+                      style={{ border: 0, borderRadius: '8px', width: '100%' }}
+                    />
+                  </div>
+                ) : null}
+              </>
+            ) : role === 'farmer' ? (
+              <>
+                {forms[role].slice(0, 8).map(([name, label, type]) => (
+                  type === 'upload' ? null : (
+                    <FormField
+                      key={name}
+                      name={name}
+                      label={label}
+                      type={type}
+                      value={form[name] || ''}
+                      onChange={handleChange}
+                      required={farmerRequired.includes(name)}
+                    />
+                  )
+                ))}
+                {renderLocationSearch('Farm location', locationQuery || farmerAddressQuery || form.village, 'Enter village, mandal, district, state, or pincode')}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 w-full">
+                  <FormField label="Farm latitude" name="lat" type="number" step="any" value={form.lat || defaults.lat} onChange={handleChange} required />
+                  <FormField label="Farm longitude" name="lng" type="number" step="any" value={form.lng || defaults.lng} onChange={handleChange} required />
+                </div>
+                {form.lat && form.lng ? (
+                  <div className="landing-map-wrapper w-full overflow-hidden rounded-lg shadow-sm" style={{ marginTop: '8px' }}>
+                    <iframe
+                      title="Farm Location Map Preview"
+                      width="100%"
+                      height="200"
+                      frameBorder="0"
+                      scrolling="no"
+                      marginHeight={0}
+                      marginWidth={0}
+                      src={`https://www.openstreetmap.org/export/embed.html?bbox=${Number(form.lng) - 0.005},${Number(form.lat) - 0.005},${Number(form.lng) + 0.005},${Number(form.lat) + 0.005}&layer=mapnik&marker=${form.lat},${form.lng}`}
+                      style={{ border: 0, borderRadius: '8px', width: '100%' }}
+                    />
+                  </div>
+                ) : null}
+                <ImageUploadField
+                  label="Aadhaar document"
+                  value={form.aadhaarDocumentUrl || ''}
+                  onChange={(url) => setForm((current) => ({ ...current, aadhaarDocumentUrl: url }))}
+                  required
+                  folder="kyc"
+                  accept="document"
+                  helpText="Upload a clear Aadhaar photo or PDF for KYC verification."
+                />
+              </>
+            ) : role === 'b2b' ? (
               <>
                 {forms[role].slice(0, 5).map(([name, label, type]) => (
                   type === 'upload' ? (
@@ -315,7 +447,7 @@ export default function OnboardingPage() {
                     />
                   )
                 ))}
-                                {/* Standard Form Field Styled Business Address with Search Button */}
+                {/* Standard Form Field Styled Business Address with Search Button */}
                 <div className="w-full">
                   <label className="field-label" style={{ fontSize: 13, fontWeight: 600, color: 'var(--ink)', display: 'block', marginBottom: 7 }}>
                     Business address <span style={{ color: 'var(--danger)' }}>*</span>
@@ -333,12 +465,13 @@ export default function OnboardingPage() {
                     </div>
                     <button
                       type="button"
-                      onClick={searchLocation}
+                      onClick={() => searchLocation(customerAddressQuery || form.address)}
                       className="w-full sm:w-auto px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-md transition-all text-sm shadow-sm flex items-center justify-center gap-2 shrink-0 cursor-pointer"
                       style={{ height: 48 }}
+                      disabled={searchingLocation}
                     >
                       <Search size={16} />
-                      <span>Search Location</span>
+                      <span>{searchingLocation ? 'Searching...' : 'Search Location'}</span>
                     </button>
                   </div>
                 </div>

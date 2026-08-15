@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { sendSuccess, sendError } from '../../utils/response';
-import { db, Shop } from '../../store/db.store';
+import { Shop } from '../../store/db.store';
 import {
   clearShopIdFromProducts,
   deleteShopById,
@@ -35,31 +35,23 @@ async function persistShop(shop: Shop) {
 
 async function resolveShops() {
   const rows = await listShops();
-  if (rows.length) return rows.map((row) => toStoreShop(row));
-  return db.shops;
+  return rows.map((row) => toStoreShop(row));
 }
 
 async function resolveShopById(id: string) {
   const row = await findShopById(id);
-  if (row) return toStoreShop(row);
-  return db.shops.find((shop) => shop.id === id) ?? null;
+  return row ? toStoreShop(row) : null;
 }
 
 async function attachProductCounts<T extends { id: string }>(shops: T[]) {
   const pgCounts = await countProductsByShopIds();
   return shops.map((shop) => {
-    const memoryCount = db.products.filter((product) => product.shopId === shop.id).length;
     const pgCount = pgCounts.get(shop.id) ?? 0;
-    return { ...shop, productCount: Math.max(pgCount, memoryCount) };
+    return { ...shop, productCount: pgCount };
   });
 }
 
 async function removeShop(shopId: string) {
-  const index = db.shops.findIndex((shop) => shop.id === shopId);
-  if (index !== -1) db.shops.splice(index, 1);
-  for (const product of db.products) {
-    if (product.shopId === shopId) product.shopId = undefined;
-  }
   await clearShopIdFromProducts(shopId);
   await deleteShopById(shopId);
 }
@@ -96,8 +88,7 @@ router.get('/farmer/my-shop', async (req: Request, res: Response) => {
   const farmerId = String(req.query.farmerId || '');
   if (!farmerId) return sendError(res, 400, 'VALIDATION_ERROR', 'farmerId is required');
   const row = await findShopByFarmerId(farmerId);
-  const memoryShop = db.shops.find((item) => item.farmerId === farmerId) ?? null;
-  const shop = row ? toStoreShop(row) : memoryShop;
+  const shop = row ? toStoreShop(row) : null;
   if (!shop?.id) return sendSuccess(res, 200, 'Farmer shop retrieved', null);
   const [withCount] = await attachProductCounts([shop]);
   return sendSuccess(res, 200, 'Farmer shop retrieved', withCount);
@@ -107,8 +98,7 @@ router.post('/farmer/shops', async (req: Request, res: Response) => {
   const farmerId = String(req.body.farmerId || '');
   if (!farmerId) return sendError(res, 400, 'VALIDATION_ERROR', 'farmerId is required');
   const existing = await findShopByFarmerId(farmerId);
-  const memoryExisting = db.shops.find((item) => item.farmerId === farmerId);
-  if (existing || memoryExisting) return sendError(res, 400, 'SHOP_EXISTS', 'You already have a shop. Edit or delete it first.');
+  if (existing) return sendError(res, 400, 'SHOP_EXISTS', 'You already have a shop. Edit or delete it first.');
   const shop: Shop = {
     id: 'shop_' + Date.now(),
     name: req.body.name,
@@ -123,7 +113,6 @@ router.post('/farmer/shops', async (req: Request, res: Response) => {
       lng: req.body.lng ? Number(req.body.lng) : 80.648,
     },
   };
-  db.shops.push(shop);
   await persistShop(shop);
   return sendSuccess(res, 201, 'Farmer shop created', { ...shop, productCount: 0 });
 });
@@ -150,9 +139,6 @@ router.put('/farmer/shops/:id', async (req: Request, res: Response) => {
       lng: req.body.lng !== undefined ? Number(req.body.lng) : existing.location.lng,
     },
   };
-  const index = db.shops.findIndex((shop) => shop.id === shopId);
-  if (index === -1) db.shops.push(updated);
-  else db.shops[index] = updated;
   await persistShop(updated);
   const [withCount] = await attachProductCounts([updated]);
   return sendSuccess(res, 200, 'Farmer shop updated', withCount);

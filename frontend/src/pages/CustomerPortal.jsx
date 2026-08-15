@@ -14,14 +14,32 @@ import { buildCartPayload } from '../utils/cart.js';
 import { useAuth } from '../context/AuthContext.jsx';
 import { useState } from 'react';
 
+function loadRazorpayScript() {
+  return new Promise((resolve) => {
+    if (window.Razorpay) return resolve(true);
+    const existing = document.querySelector('script[src="https://checkout.razorpay.com/v1/checkout.js"]');
+    if (existing) {
+      existing.addEventListener('load', () => resolve(true), { once: true });
+      existing.addEventListener('error', () => resolve(false), { once: true });
+      return;
+    }
+    const script = document.createElement('script');
+    script.src = 'https://checkout.razorpay.com/v1/checkout.js';
+    script.async = true;
+    script.onload = () => resolve(true);
+    script.onerror = () => resolve(false);
+    document.body.appendChild(script);
+  });
+}
+
 const nav = [
-  { label: 'Home', href: '/customer/home', icon: Home },
-  { label: 'Browse', href: '/customer/browse', icon: Search },
-  { label: 'Cart', href: '/customer/cart', icon: ShoppingCart },
-  { label: 'Orders', href: '/customer/orders', icon: ClipboardList },
-  { label: 'Savings', href: '/customer/savings', icon: PiggyBank },
-  { label: 'Profile', href: '/customer/profile', icon: User },
-  { label: 'Support', href: '/customer/disputes', icon: LifeBuoy },
+  { group: 'Shop', label: 'Home', href: '/customer/home', icon: Home, hint: 'Welcome, banners, and nearby picks' },
+  { group: 'Shop', label: 'Browse', href: '/customer/browse', icon: Search, hint: 'Search by product, category, or radius' },
+  { group: 'Shop', label: 'Cart', href: '/customer/cart', icon: ShoppingCart, hint: 'Grouped by farmer for checkout' },
+  { group: 'Orders', label: 'Orders', href: '/customer/orders', icon: ClipboardList, hint: 'Track every delivery status' },
+  { group: 'Orders', label: 'Savings', href: '/customer/savings', icon: PiggyBank, hint: 'See saved amount and history' },
+  { group: 'Account', label: 'Profile', href: '/customer/profile', icon: User, hint: 'Addresses, language, and PIN' },
+  { group: 'Account', label: 'Support', href: '/customer/disputes', icon: LifeBuoy, hint: 'Raise disputes and get help' },
 ];
 
 function useCustomerProducts(query = {}) {
@@ -120,12 +138,77 @@ function CartPage() {
   const { user } = useAuth();
   const { data: cart, setData } = useApi(() => endpoints.cart(), { groups: [], subtotal: 0, itemsCount: 0, deliveryFeeTotal: 0, grandTotal: 0, totalSavings: 0 }, []);
   const history = useHistory();
+  const [paymentModal, setPaymentModal] = useState(false);
+  const [paymentMode, setPaymentMode] = useState('cod');
+  const [busy, setBusy] = useState(false);
   const remove = async (id) => {
     await endpoints.removeCartItem(id);
     const next = unwrap(await endpoints.cart());
     setData(next);
   };
   const items = cart.groups?.flatMap((group) => group.items.map((item) => ({ ...item, farmerName: group.farmerName }))) || [];
+  const submitCheckout = async () => {
+    const firstGroup = cart.groups?.[0];
+    const itemsPayload = firstGroup?.items?.map((item) => ({
+      productId: item.productId,
+      qty: item.qty,
+      name: item.name,
+      price: item.price,
+      unit: item.unit,
+      sellerId: item.farmerId || firstGroup?.farmerId,
+      sellerName: item.farmerName || firstGroup?.farmerName,
+    })) || [];
+
+    const orderResp = await endpoints.createOrder({
+      buyerId: user?.id,
+      sellerId: firstGroup?.farmerId,
+      sellerName: firstGroup?.farmerName,
+      items: itemsPayload,
+      paymentMode: paymentMode === 'razorpay' ? 'online' : 'cod',
+    });
+    const order = orderResp.data?.data || orderResp.data;
+
+    if (paymentMode === 'razorpay') {
+      const scriptReady = await loadRazorpayScript();
+      if (!scriptReady || !window.Razorpay) {
+        throw new Error('Razorpay checkout failed to load.');
+      }
+
+      const rzOrder = await endpoints.createRazorpayOrder({ amount: order.totalAmount });
+      const rzData = rzOrder.data?.data || rzOrder.data;
+      const options = {
+        key: rzData.keyId,
+        amount: Math.round(Number(rzData.amount) * 100),
+        currency: rzData.currency || 'INR',
+        name: 'Aswamithra',
+        description: 'Customer checkout',
+        order_id: rzData.razorpayOrderId,
+        handler: async (response) => {
+          await endpoints.verifyRazorpayPayment({
+            razorpayPaymentId: response.razorpay_payment_id,
+            orderId: order.id,
+          });
+          setPaymentModal(false);
+          history.push('/customer/orders');
+        },
+        modal: {
+          ondismiss: () => setBusy(false),
+        },
+        prefill: {
+          name: user?.name || '',
+          contact: user?.mobile || '',
+        },
+        theme: { color: '#2563eb' },
+      };
+      const rz = new window.Razorpay(options);
+      rz.on('payment.failed', () => setBusy(false));
+      rz.open();
+      return;
+    }
+
+    setPaymentModal(false);
+    history.push('/customer/orders');
+  };
   return (
     <div className="content-split">
       <section className="panel">
@@ -153,26 +236,31 @@ function CartPage() {
         <p>Delivery fee: <strong>{money(cart.deliveryFeeTotal || 0)}</strong></p>
         <p>Projected savings: <strong>{money(cart.totalSavings || 0)}</strong></p>
         <p>Grand total: <strong>{money(cart.grandTotal || cart.subtotal)}</strong></p>
-        <button className="btn btn-primary full big" disabled={!cart.itemsCount} onClick={async () => {
-          const firstGroup = cart.groups?.[0];
-          await endpoints.createOrder({
-            buyerId: user?.id,
-            sellerId: firstGroup?.farmerId,
-            sellerName: firstGroup?.farmerName,
-            items: firstGroup?.items?.map((item) => ({
-              productId: item.productId,
-              qty: item.qty,
-              name: item.name,
-              price: item.price,
-              unit: item.unit,
-              sellerId: item.farmerId || firstGroup?.farmerId,
-              sellerName: item.farmerName || firstGroup?.farmerName,
-            })) || [],
-            paymentMode: 'cod',
-          });
-          history.push('/customer/orders');
-        }}>Place COD order</button>
+        <button className="btn btn-primary full big" disabled={!cart.itemsCount} onClick={() => setPaymentModal(true)}>Place order</button>
       </section>
+      {paymentModal ? (
+        <div className="modal-backdrop" role="presentation" onClick={() => !busy && setPaymentModal(false)}>
+          <section className="modal" role="dialog" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-head"><h2>Choose payment method</h2></div>
+            <div className="form-grid single">
+              <label className="field-label"><input type="radio" checked={paymentMode === 'cod'} onChange={() => setPaymentMode('cod')} /> Cash on Delivery</label>
+              <label className="field-label"><input type="radio" checked={paymentMode === 'razorpay'} onChange={() => setPaymentMode('razorpay')} /> Razorpay</label>
+            </div>
+            <div className="modal-actions">
+              <button className="btn btn-light" type="button" onClick={() => setPaymentModal(false)} disabled={busy}>Cancel</button>
+              <button className="btn btn-primary" type="button" disabled={busy} onClick={async () => {
+                setBusy(true);
+                try {
+                  await submitCheckout();
+                } catch (error) {
+                  setBusy(false);
+                  // Keep the modal open so the user can retry.
+                }
+              }}>{busy ? 'Processing...' : paymentMode === 'razorpay' ? 'Pay now' : 'Place COD order'}</button>
+            </div>
+          </section>
+        </div>
+      ) : null}
     </div>
   );
 }

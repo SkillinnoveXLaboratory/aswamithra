@@ -211,6 +211,8 @@ export interface B2bRfq {
   maxBudgetPerKg?: number;
   deliveryDate?: string;
   deliveryCity?: string;
+  buyerLat?: number;
+  buyerLng?: number;
   status: 'OPEN' | 'CLOSED' | 'CANCELLED';
   bids?: any[];
   createdAt: string;
@@ -223,6 +225,9 @@ export interface B2bQuote {
   farmerName: string;
   pricePerQuintal: number;
   deliveryDate: string;
+  message?: string;
+  requestOrder?: boolean;
+  requestedOrderPricePerQuintal?: number;
   status: 'PENDING' | 'ACCEPTED' | 'REJECTED';
 }
 
@@ -633,6 +638,7 @@ class DatabaseStore {
   mapLat: number = 16.5062;
   mapLng: number = 80.6480;
   mapAddress: string = 'Vijayawada, Andhra Pradesh';
+  commissionRatePercent: number = 4.5;
 
   // PostGIS Distance Math (Haversine formula in km)
   calculateDistanceKm(lat1: number, lon1: number, lat2: number, lon2: number): number {

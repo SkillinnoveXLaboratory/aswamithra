@@ -92,6 +92,113 @@ CREATE TABLE IF NOT EXISTS orders (
   delivered_at TIMESTAMPTZ
 );
 
+CREATE TABLE IF NOT EXISTS b2b_rfq (
+  id VARCHAR(64) PRIMARY KEY,
+  buyer_id VARCHAR(64) NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  buyer_name VARCHAR(100),
+  company_name VARCHAR(120),
+  gst_number VARCHAR(40),
+  crop_name VARCHAR(120) NOT NULL,
+  quantity_quintals NUMERIC(12, 2) NOT NULL,
+  quantity_tons NUMERIC(12, 2),
+  target_price_per_quintal NUMERIC(12, 2),
+  max_budget_per_kg NUMERIC(12, 2),
+  delivery_date DATE,
+  delivery_city VARCHAR(120),
+  buyer_lat DOUBLE PRECISION,
+  buyer_lng DOUBLE PRECISION,
+  status VARCHAR(20) NOT NULL DEFAULT 'OPEN' CHECK (status IN ('OPEN', 'CLOSED', 'CANCELLED')),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS b2b_quotes (
+  id VARCHAR(64) PRIMARY KEY,
+  rfq_id VARCHAR(64) NOT NULL REFERENCES b2b_rfq(id) ON DELETE CASCADE,
+  farmer_id VARCHAR(64) NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  farmer_name VARCHAR(120) NOT NULL,
+  price_per_quintal NUMERIC(12, 2) NOT NULL,
+  delivery_date DATE,
+  message TEXT,
+  request_order BOOLEAN NOT NULL DEFAULT FALSE,
+  requested_order_price_per_quintal NUMERIC(12, 2),
+  status VARCHAR(20) NOT NULL DEFAULT 'PENDING' CHECK (status IN ('PENDING', 'ACCEPTED', 'REJECTED')),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS notifications (
+  id VARCHAR(64) PRIMARY KEY,
+  user_id VARCHAR(64) NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  title VARCHAR(120) NOT NULL,
+  message TEXT NOT NULL,
+  read BOOLEAN NOT NULL DEFAULT FALSE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS earnings_ledger (
+  id VARCHAR(64) PRIMARY KEY,
+  farmer_id VARCHAR(64) NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  order_id VARCHAR(64) NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
+  aswamithra_sale_value NUMERIC(12, 2) NOT NULL,
+  local_mandi_value NUMERIC(12, 2) NOT NULL,
+  extra_earned_amount NUMERIC(12, 2) NOT NULL,
+  date DATE NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS delivery_partners (
+  id VARCHAR(64) PRIMARY KEY,
+  name VARCHAR(120) NOT NULL,
+  mobile VARCHAR(20) NOT NULL,
+  vehicle VARCHAR(40) NOT NULL,
+  status VARCHAR(20) NOT NULL DEFAULT 'online' CHECK (status IN ('online', 'offline', 'busy')),
+  lat DOUBLE PRECISION NOT NULL,
+  lng DOUBLE PRECISION NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS categories (
+  id VARCHAR(64) PRIMARY KEY,
+  name VARCHAR(120) NOT NULL,
+  slug VARCHAR(160) NOT NULL UNIQUE,
+  icon VARCHAR(20) NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS units (
+  id VARCHAR(64) PRIMARY KEY,
+  code VARCHAR(40) NOT NULL UNIQUE,
+  label VARCHAR(120) NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS commission_slabs (
+  id VARCHAR(64) PRIMARY KEY,
+  min_amount NUMERIC(12,2) NOT NULL,
+  max_amount NUMERIC(12,2) NOT NULL,
+  rate_percent NUMERIC(5,2) NOT NULL,
+  applicable_category VARCHAR(120) NOT NULL,
+  applicable_region VARCHAR(120) NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS market_prices (
+  id VARCHAR(64) PRIMARY KEY,
+  crop_name VARCHAR(120) NOT NULL,
+  category VARCHAR(120) NOT NULL,
+  region VARCHAR(120) NOT NULL,
+  reference_price NUMERIC(12,2) NOT NULL,
+  unit VARCHAR(40) NOT NULL,
+  is_published BOOLEAN NOT NULL DEFAULT TRUE
+);
+
+CREATE TABLE IF NOT EXISTS service_locations (
+  id VARCHAR(64) PRIMARY KEY,
+  state VARCHAR(120) NOT NULL,
+  district VARCHAR(120) NOT NULL,
+  city VARCHAR(120) NOT NULL,
+  status VARCHAR(20) NOT NULL DEFAULT 'active' CHECK (status IN ('active','paused')),
+  lat DOUBLE PRECISION,
+  lng DOUBLE PRECISION,
+  active_farmers INT,
+  active_hubs INT
+);
+
 -- 6. PAYMENTS & ROUTE SPLITS TABLE
 CREATE TABLE IF NOT EXISTS payments (
   id VARCHAR(64) PRIMARY KEY,

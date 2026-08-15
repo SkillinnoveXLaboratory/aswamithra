@@ -1,4 +1,5 @@
 import { query } from '../config/db.config';
+export { query } from '../config/db.config';
 import { db } from '../store/db.store';
 
 type DbUserRow = {
@@ -124,8 +125,8 @@ function normalizeStatus(status: string | null | undefined): 'active' | 'suspend
 }
 
 export async function ensureTablesReady() {
-  await query(`
-    CREATE TABLE IF NOT EXISTS users (
+  const statements = [
+    `CREATE TABLE IF NOT EXISTS users (
       id VARCHAR(64) PRIMARY KEY,
       mobile VARCHAR(20) UNIQUE NOT NULL,
       email VARCHAR(120),
@@ -135,8 +136,8 @@ export async function ensureTablesReady() {
       language VARCHAR(10) DEFAULT 'te',
       avatar_url TEXT,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-    );
-    CREATE TABLE IF NOT EXISTS user_addresses (
+    )`,
+    `CREATE TABLE IF NOT EXISTS user_addresses (
       id VARCHAR(64) PRIMARY KEY,
       user_id VARCHAR(64) NOT NULL REFERENCES users(id) ON DELETE CASCADE,
       name VARCHAR(100) NOT NULL,
@@ -150,8 +151,8 @@ export async function ensureTablesReady() {
       lng DOUBLE PRECISION NOT NULL,
       is_default BOOLEAN NOT NULL DEFAULT FALSE,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-    );
-    CREATE TABLE IF NOT EXISTS products (
+    )`,
+    `CREATE TABLE IF NOT EXISTS products (
       id VARCHAR(64) PRIMARY KEY,
       seller_id VARCHAR(64) NOT NULL REFERENCES users(id) ON DELETE CASCADE,
       seller_name VARCHAR(100) NOT NULL,
@@ -171,8 +172,8 @@ export async function ensureTablesReady() {
       status VARCHAR(20) NOT NULL DEFAULT 'active',
       is_featured BOOLEAN NOT NULL DEFAULT FALSE,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-    );
-    CREATE TABLE IF NOT EXISTS kyc_submissions (
+    )`,
+    `CREATE TABLE IF NOT EXISTS kyc_submissions (
       id VARCHAR(64) PRIMARY KEY,
       user_id VARCHAR(64) NOT NULL REFERENCES users(id) ON DELETE CASCADE,
       name VARCHAR(100) NOT NULL,
@@ -186,8 +187,8 @@ export async function ensureTablesReady() {
       status VARCHAR(20) NOT NULL DEFAULT 'pending',
       bank_verified BOOLEAN NOT NULL DEFAULT FALSE,
       submitted_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-    );
-    CREATE TABLE IF NOT EXISTS banners (
+    )`,
+    `CREATE TABLE IF NOT EXISTS banners (
       id VARCHAR(64) PRIMARY KEY,
       title VARCHAR(120) NOT NULL,
       image_url TEXT NOT NULL,
@@ -195,26 +196,25 @@ export async function ensureTablesReady() {
       audience VARCHAR(40) NOT NULL DEFAULT 'customer',
       status VARCHAR(20) NOT NULL DEFAULT 'active',
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-    );
-    CREATE TABLE IF NOT EXISTS social_links (
+    )`,
+    `CREATE TABLE IF NOT EXISTS social_links (
       id VARCHAR(64) PRIMARY KEY,
       platform VARCHAR(40) NOT NULL,
       url TEXT NOT NULL,
       is_visible BOOLEAN NOT NULL DEFAULT TRUE,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-    );
-    CREATE TABLE IF NOT EXISTS cms_pages (
+    )`,
+    `CREATE TABLE IF NOT EXISTS cms_pages (
       slug VARCHAR(120) PRIMARY KEY,
       title VARCHAR(120) NOT NULL,
       content TEXT NOT NULL,
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-    );
-    CREATE TABLE IF NOT EXISTS site_config (
+    )`,
+    `CREATE TABLE IF NOT EXISTS site_config (
       key VARCHAR(120) PRIMARY KEY,
       value TEXT
-    );
-
-    CREATE TABLE IF NOT EXISTS shops (
+    )`,
+    `CREATE TABLE IF NOT EXISTS shops (
       id VARCHAR(64) PRIMARY KEY,
       name VARCHAR(120) NOT NULL,
       farmer_id VARCHAR(64) REFERENCES users(id) ON DELETE SET NULL,
@@ -226,23 +226,175 @@ export async function ensureTablesReady() {
       lng DOUBLE PRECISION,
       status VARCHAR(20) NOT NULL DEFAULT 'active',
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-    );
-    ALTER TABLE kyc_submissions ADD COLUMN IF NOT EXISTS documents TEXT[] DEFAULT '{}';
-    ALTER TABLE kyc_submissions ADD COLUMN IF NOT EXISTS details JSONB DEFAULT '{}'::jsonb;
-    ALTER TABLE kyc_submissions ADD COLUMN IF NOT EXISTS mandal VARCHAR(100);
-    ALTER TABLE kyc_submissions ADD COLUMN IF NOT EXISTS state VARCHAR(100);
-    ALTER TABLE kyc_submissions ADD COLUMN IF NOT EXISTS pincode VARCHAR(20);
-    ALTER TABLE kyc_submissions ADD COLUMN IF NOT EXISTS lat DOUBLE PRECISION;
-    ALTER TABLE kyc_submissions ADD COLUMN IF NOT EXISTS lng DOUBLE PRECISION;
-    ALTER TABLE kyc_submissions ADD COLUMN IF NOT EXISTS mobile VARCHAR(20);
-    ALTER TABLE kyc_submissions ADD COLUMN IF NOT EXISTS bank_account_name VARCHAR(120);
-    ALTER TABLE kyc_submissions ADD COLUMN IF NOT EXISTS aadhaar_number VARCHAR(20);
-    ALTER TABLE kyc_submissions ADD COLUMN IF NOT EXISTS bank_account_number VARCHAR(30);
-    ALTER TABLE kyc_submissions ADD COLUMN IF NOT EXISTS crops_grown TEXT;
-    ALTER TABLE kyc_submissions ADD COLUMN IF NOT EXISTS land_size_acres VARCHAR(40);
-    ALTER TABLE products ADD COLUMN IF NOT EXISTS shop_id VARCHAR(64);
-    ALTER TABLE users ADD COLUMN IF NOT EXISTS pin_hash TEXT;
-  `);
+    )`,
+    `CREATE TABLE IF NOT EXISTS orders (
+      id VARCHAR(64) PRIMARY KEY,
+      buyer_id VARCHAR(64) NOT NULL REFERENCES users(id),
+      seller_id VARCHAR(64) NOT NULL REFERENCES users(id),
+      seller_name VARCHAR(100) NOT NULL,
+      items JSONB NOT NULL,
+      total_amount NUMERIC(10, 2) NOT NULL,
+      commission_rate NUMERIC(5, 2) NOT NULL,
+      commission_amount NUMERIC(10, 2) NOT NULL,
+      farmer_payout_amount NUMERIC(10, 2) NOT NULL,
+      status VARCHAR(30) NOT NULL DEFAULT 'PLACED',
+      payment_mode VARCHAR(20) NOT NULL DEFAULT 'cod',
+      payment_status VARCHAR(20) NOT NULL DEFAULT 'PENDING',
+      delivery_otp VARCHAR(6) NOT NULL DEFAULT '000000',
+      razorpay_order_id VARCHAR(100),
+      notes TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      delivered_at TIMESTAMPTZ
+    )`,
+    `ALTER TABLE kyc_submissions ADD COLUMN IF NOT EXISTS documents TEXT[] DEFAULT '{}'`,
+    `ALTER TABLE kyc_submissions ADD COLUMN IF NOT EXISTS details JSONB DEFAULT '{}'::jsonb`,
+    `ALTER TABLE kyc_submissions ADD COLUMN IF NOT EXISTS mandal VARCHAR(100)`,
+    `ALTER TABLE kyc_submissions ADD COLUMN IF NOT EXISTS state VARCHAR(100)`,
+    `ALTER TABLE kyc_submissions ADD COLUMN IF NOT EXISTS pincode VARCHAR(20)`,
+    `ALTER TABLE kyc_submissions ADD COLUMN IF NOT EXISTS lat DOUBLE PRECISION`,
+    `ALTER TABLE kyc_submissions ADD COLUMN IF NOT EXISTS lng DOUBLE PRECISION`,
+    `ALTER TABLE kyc_submissions ADD COLUMN IF NOT EXISTS mobile VARCHAR(20)`,
+    `ALTER TABLE kyc_submissions ADD COLUMN IF NOT EXISTS bank_account_name VARCHAR(120)`,
+    `ALTER TABLE kyc_submissions ADD COLUMN IF NOT EXISTS aadhaar_number VARCHAR(20)`,
+    `ALTER TABLE kyc_submissions ADD COLUMN IF NOT EXISTS bank_account_number VARCHAR(30)`,
+    `ALTER TABLE kyc_submissions ADD COLUMN IF NOT EXISTS crops_grown TEXT`,
+    `ALTER TABLE kyc_submissions ADD COLUMN IF NOT EXISTS land_size_acres VARCHAR(40)`,
+    `ALTER TABLE products ADD COLUMN IF NOT EXISTS shop_id VARCHAR(64)`,
+    `ALTER TABLE users ADD COLUMN IF NOT EXISTS pin_hash TEXT`,
+    `ALTER TABLE b2b_quotes ADD COLUMN IF NOT EXISTS order_id VARCHAR(64)`,
+    `ALTER TABLE b2b_quotes ADD COLUMN IF NOT EXISTS order_status VARCHAR(20)`,
+    `CREATE TABLE IF NOT EXISTS categories (
+      id VARCHAR(64) PRIMARY KEY,
+      name VARCHAR(120) NOT NULL,
+      slug VARCHAR(160) NOT NULL UNIQUE,
+      icon VARCHAR(20) NOT NULL
+    )`,
+    `CREATE TABLE IF NOT EXISTS units (
+      id VARCHAR(64) PRIMARY KEY,
+      code VARCHAR(40) NOT NULL UNIQUE,
+      label VARCHAR(120) NOT NULL
+    )`,
+    `CREATE TABLE IF NOT EXISTS commission_slabs (
+      id VARCHAR(64) PRIMARY KEY,
+      min_amount NUMERIC(12,2) NOT NULL,
+      max_amount NUMERIC(12,2) NOT NULL,
+      rate_percent NUMERIC(5,2) NOT NULL,
+      applicable_category VARCHAR(120) NOT NULL,
+      applicable_region VARCHAR(120) NOT NULL
+    )`,
+    `CREATE TABLE IF NOT EXISTS market_prices (
+      id VARCHAR(64) PRIMARY KEY,
+      crop_name VARCHAR(120) NOT NULL,
+      category VARCHAR(120) NOT NULL,
+      region VARCHAR(120) NOT NULL,
+      reference_price NUMERIC(12,2) NOT NULL,
+      unit VARCHAR(40) NOT NULL,
+      is_published BOOLEAN NOT NULL DEFAULT TRUE
+    )`,
+    `CREATE TABLE IF NOT EXISTS service_locations (
+      id VARCHAR(64) PRIMARY KEY,
+      state VARCHAR(120) NOT NULL,
+      district VARCHAR(120) NOT NULL,
+      city VARCHAR(120) NOT NULL,
+      status VARCHAR(20) NOT NULL DEFAULT 'active',
+      lat DOUBLE PRECISION,
+      lng DOUBLE PRECISION,
+      active_farmers INT,
+      active_hubs INT
+    )`,
+    `CREATE TABLE IF NOT EXISTS notifications (
+      id VARCHAR(64) PRIMARY KEY,
+      user_id VARCHAR(64) NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      title VARCHAR(120) NOT NULL,
+      message TEXT NOT NULL,
+      read BOOLEAN NOT NULL DEFAULT FALSE,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )`,
+    `CREATE TABLE IF NOT EXISTS earnings_ledger (
+      id VARCHAR(64) PRIMARY KEY,
+      farmer_id VARCHAR(64) NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      order_id VARCHAR(64) NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
+      aswamithra_sale_value NUMERIC(12, 2) NOT NULL,
+      local_mandi_value NUMERIC(12, 2) NOT NULL,
+      extra_earned_amount NUMERIC(12, 2) NOT NULL,
+      date DATE NOT NULL
+    )`,
+    `CREATE TABLE IF NOT EXISTS delivery_partners (
+      id VARCHAR(64) PRIMARY KEY,
+      name VARCHAR(120) NOT NULL,
+      mobile VARCHAR(20) NOT NULL,
+      vehicle VARCHAR(40) NOT NULL,
+      status VARCHAR(20) NOT NULL DEFAULT 'online',
+      lat DOUBLE PRECISION NOT NULL,
+      lng DOUBLE PRECISION NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )`,
+    `CREATE TABLE IF NOT EXISTS b2b_rfq (
+      id VARCHAR(64) PRIMARY KEY,
+      buyer_id VARCHAR(64) NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      buyer_name VARCHAR(100),
+      company_name VARCHAR(120),
+      gst_number VARCHAR(40),
+      crop_name VARCHAR(120) NOT NULL,
+      quantity_quintals NUMERIC(12, 2) NOT NULL,
+      quantity_tons NUMERIC(12, 2),
+      target_price_per_quintal NUMERIC(12, 2),
+      max_budget_per_kg NUMERIC(12, 2),
+      delivery_date DATE,
+      delivery_city VARCHAR(120),
+      buyer_lat DOUBLE PRECISION,
+      buyer_lng DOUBLE PRECISION,
+      status VARCHAR(20) NOT NULL DEFAULT 'OPEN',
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )`,
+    `CREATE TABLE IF NOT EXISTS b2b_quotes (
+      id VARCHAR(64) PRIMARY KEY,
+      rfq_id VARCHAR(64) NOT NULL REFERENCES b2b_rfq(id) ON DELETE CASCADE,
+      farmer_id VARCHAR(64) NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      farmer_name VARCHAR(120) NOT NULL,
+      price_per_quintal NUMERIC(12, 2) NOT NULL,
+      delivery_date DATE,
+      message TEXT,
+      request_order BOOLEAN NOT NULL DEFAULT FALSE,
+      requested_order_price_per_quintal NUMERIC(12, 2),
+      status VARCHAR(20) NOT NULL DEFAULT 'PENDING',
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )`,
+    `CREATE TABLE IF NOT EXISTS payments (
+      id VARCHAR(64) PRIMARY KEY,
+      order_id VARCHAR(64) NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
+      amount NUMERIC(10, 2) NOT NULL,
+      razorpay_payment_id VARCHAR(100) NOT NULL,
+      farmer_share NUMERIC(10, 2) NOT NULL,
+      platform_commission NUMERIC(10, 2) NOT NULL,
+      status VARCHAR(20) NOT NULL DEFAULT 'PAID',
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )`,
+    `CREATE TABLE IF NOT EXISTS reviews (
+      id VARCHAR(64) PRIMARY KEY,
+      farmer_id VARCHAR(64) NOT NULL REFERENCES users(id),
+      product_id VARCHAR(64) NOT NULL REFERENCES products(id),
+      customer_name VARCHAR(100) NOT NULL,
+      rating INT NOT NULL,
+      comment TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )`,
+    `CREATE TABLE IF NOT EXISTS disputes (
+      id VARCHAR(64) PRIMARY KEY,
+      order_id VARCHAR(64) NOT NULL REFERENCES orders(id),
+      customer_id VARCHAR(64) NOT NULL REFERENCES users(id),
+      customer_name VARCHAR(100) NOT NULL,
+      farmer_name VARCHAR(100) NOT NULL,
+      reason TEXT NOT NULL,
+      status VARCHAR(20) NOT NULL DEFAULT 'OPEN',
+      resolution TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )`,
+  ];
+
+  for (const statement of statements) {
+    await query(statement);
+  }
 }
 
 export async function setUserPinHash(userId: string, pinHash: string) {
@@ -800,6 +952,493 @@ export async function deleteCmsPage(slug: string) {
   await query('DELETE FROM cms_pages WHERE slug = $1', [slug]);
 }
 
+export async function listOrdersByBuyer(buyerId?: string) {
+  const sql = buyerId ? 'SELECT * FROM orders WHERE buyer_id = $1 ORDER BY created_at DESC' : 'SELECT * FROM orders ORDER BY created_at DESC';
+  const res = buyerId ? await query<any>(sql, [buyerId]) : await query<any>(sql);
+  return res.rows;
+}
+
+export async function listOrdersBySeller(sellerId?: string) {
+  const sql = sellerId ? 'SELECT * FROM orders WHERE seller_id = $1 ORDER BY created_at DESC' : 'SELECT * FROM orders ORDER BY created_at DESC';
+  const res = sellerId ? await query<any>(sql, [sellerId]) : await query<any>(sql);
+  return res.rows;
+}
+
+export async function findOrderById(id: string) {
+  const res = await query<any>('SELECT * FROM orders WHERE id = $1 LIMIT 1', [id]);
+  return res.rows[0] ?? null;
+}
+
+export async function insertOrder(input: {
+  id: string;
+  buyerId: string;
+  sellerId: string;
+  sellerName: string;
+  items: any;
+  totalAmount: number;
+  commissionRate: number;
+  commissionAmount: number;
+  farmerPayoutAmount: number;
+  status: string;
+  paymentMode: string;
+  paymentStatus: string;
+  deliveryOtp: string;
+  razorpayOrderId?: string | null;
+  notes?: string | null;
+  deliveredAt?: string | null;
+}) {
+  await query(
+    `INSERT INTO orders (id, buyer_id, seller_id, seller_name, items, total_amount, commission_rate, commission_amount, farmer_payout_amount, status, payment_mode, payment_status, delivery_otp, razorpay_order_id, notes, delivered_at)
+     VALUES ($1,$2,$3,$4,$5::jsonb,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)
+     ON CONFLICT (id) DO UPDATE SET
+      buyer_id = EXCLUDED.buyer_id,
+      seller_id = EXCLUDED.seller_id,
+      seller_name = EXCLUDED.seller_name,
+      items = EXCLUDED.items,
+      total_amount = EXCLUDED.total_amount,
+      commission_rate = EXCLUDED.commission_rate,
+      commission_amount = EXCLUDED.commission_amount,
+      farmer_payout_amount = EXCLUDED.farmer_payout_amount,
+      status = EXCLUDED.status,
+      payment_mode = EXCLUDED.payment_mode,
+      payment_status = EXCLUDED.payment_status,
+      delivery_otp = EXCLUDED.delivery_otp,
+      razorpay_order_id = EXCLUDED.razorpay_order_id,
+      notes = EXCLUDED.notes,
+      delivered_at = EXCLUDED.delivered_at`,
+    [
+      input.id,
+      input.buyerId,
+      input.sellerId,
+      input.sellerName,
+      JSON.stringify(input.items),
+      input.totalAmount,
+      input.commissionRate,
+      input.commissionAmount,
+      input.farmerPayoutAmount,
+      input.status,
+      input.paymentMode,
+      input.paymentStatus,
+      input.deliveryOtp,
+      input.razorpayOrderId ?? null,
+      input.notes ?? null,
+      input.deliveredAt ?? null,
+    ],
+  );
+}
+
+export async function listNotificationsByUser(userId: string) {
+  const res = await query<any>('SELECT * FROM notifications WHERE user_id = $1 ORDER BY created_at DESC', [userId]);
+  return res.rows;
+}
+
+export async function insertNotification(input: { id: string; userId: string; title: string; message: string; read?: boolean }) {
+  await query(
+    `INSERT INTO notifications (id, user_id, title, message, read) VALUES ($1,$2,$3,$4,$5)
+     ON CONFLICT (id) DO UPDATE SET user_id = EXCLUDED.user_id, title = EXCLUDED.title, message = EXCLUDED.message, read = EXCLUDED.read`,
+    [input.id, input.userId, input.title, input.message, input.read ?? false],
+  );
+}
+
+export async function listB2bRfqsByBuyer(buyerId?: string) {
+  const sql = buyerId ? 'SELECT * FROM b2b_rfq WHERE buyer_id = $1 ORDER BY created_at DESC' : 'SELECT * FROM b2b_rfq ORDER BY created_at DESC';
+  const res = buyerId ? await query<any>(sql, [buyerId]) : await query<any>(sql);
+  return res.rows.map((row) => ({
+    ...row,
+    buyerId: row.buyer_id ?? row.buyerId,
+    buyerName: row.buyer_name ?? row.buyerName,
+    companyName: row.company_name ?? row.companyName,
+    gstNumber: row.gst_number ?? row.gstNumber,
+    cropName: row.crop_name ?? row.cropName,
+    quantityQuintals: Number(row.quantity_quintals ?? row.quantityQuintals ?? 0),
+    targetPricePerQuintal: row.target_price_per_quintal ?? row.targetPricePerQuintal ?? null,
+    deliveryCity: row.delivery_city ?? row.deliveryCity,
+    buyerLat: row.buyer_lat ?? row.buyerLat ?? null,
+    buyerLng: row.buyer_lng ?? row.buyerLng ?? null,
+    createdAt: row.created_at ?? row.createdAt,
+  }));
+}
+
+export async function findB2bRfqById(id: string) {
+  const res = await query<any>('SELECT * FROM b2b_rfq WHERE id = $1 LIMIT 1', [id]);
+  const row = res.rows[0];
+  if (!row) return null;
+  return {
+    ...row,
+    buyerId: row.buyer_id ?? row.buyerId,
+    buyerName: row.buyer_name ?? row.buyerName,
+    companyName: row.company_name ?? row.companyName,
+    gstNumber: row.gst_number ?? row.gstNumber,
+    cropName: row.crop_name ?? row.cropName,
+    quantityQuintals: Number(row.quantity_quintals ?? row.quantityQuintals ?? 0),
+    targetPricePerQuintal: row.target_price_per_quintal ?? row.targetPricePerQuintal ?? null,
+    deliveryCity: row.delivery_city ?? row.deliveryCity,
+    buyerLat: row.buyer_lat ?? row.buyerLat ?? null,
+    buyerLng: row.buyer_lng ?? row.buyerLng ?? null,
+    createdAt: row.created_at ?? row.createdAt,
+  };
+}
+
+export async function insertB2bRfq(input: {
+  id: string;
+  buyerId: string;
+  buyerName?: string | null;
+  companyName?: string | null;
+  gstNumber?: string | null;
+  cropName: string;
+  quantityQuintals: number;
+  targetPricePerQuintal?: number | null;
+  deliveryCity?: string | null;
+  buyerLat?: number | null;
+  buyerLng?: number | null;
+  status?: string;
+}) {
+  await query(
+    `INSERT INTO b2b_rfq (id, buyer_id, buyer_name, company_name, gst_number, crop_name, quantity_quintals, target_price_per_quintal, delivery_city, buyer_lat, buyer_lng, status)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
+     ON CONFLICT (id) DO UPDATE SET
+      buyer_id = EXCLUDED.buyer_id,
+      buyer_name = EXCLUDED.buyer_name,
+      company_name = EXCLUDED.company_name,
+      gst_number = EXCLUDED.gst_number,
+      crop_name = EXCLUDED.crop_name,
+      quantity_quintals = EXCLUDED.quantity_quintals,
+      target_price_per_quintal = EXCLUDED.target_price_per_quintal,
+      delivery_city = EXCLUDED.delivery_city,
+      buyer_lat = EXCLUDED.buyer_lat,
+      buyer_lng = EXCLUDED.buyer_lng,
+      status = EXCLUDED.status`,
+    [input.id, input.buyerId, input.buyerName ?? null, input.companyName ?? null, input.gstNumber ?? null, input.cropName, input.quantityQuintals, input.targetPricePerQuintal ?? null, input.deliveryCity ?? null, input.buyerLat ?? null, input.buyerLng ?? null, input.status ?? 'OPEN'],
+  );
+}
+
+export async function updateB2bRfqStatus(id: string, status: string) {
+  await query('UPDATE b2b_rfq SET status = $1 WHERE id = $2', [status, id]);
+}
+
+export async function listB2bQuotesByFarmer(farmerId?: string) {
+  const sql = farmerId ? 'SELECT * FROM b2b_quotes WHERE farmer_id = $1 ORDER BY created_at DESC' : 'SELECT * FROM b2b_quotes ORDER BY created_at DESC';
+  const res = farmerId ? await query<any>(sql, [farmerId]) : await query<any>(sql);
+  return res.rows.map((row) => ({
+    ...row,
+    rfqId: row.rfq_id ?? row.rfqId,
+    farmerId: row.farmer_id ?? row.farmerId,
+    farmerName: row.farmer_name ?? row.farmerName,
+    pricePerQuintal: Number(row.price_per_quintal ?? row.pricePerQuintal ?? 0),
+    deliveryDate: row.delivery_date ?? row.deliveryDate,
+    message: row.message ?? '',
+    requestOrder: Boolean(row.request_order ?? row.requestOrder),
+    requestedOrderPricePerQuintal: row.requested_order_price_per_quintal ?? row.requestedOrderPricePerQuintal ?? null,
+    orderId: row.order_id ?? row.orderId ?? null,
+    orderStatus: row.order_status ?? row.orderStatus ?? null,
+    createdAt: row.created_at ?? row.createdAt,
+  }));
+}
+
+export async function listB2bQuotesByRfq(rfqId: string) {
+  const res = await query<any>('SELECT * FROM b2b_quotes WHERE rfq_id = $1 ORDER BY created_at DESC', [rfqId]);
+  return res.rows.map((row) => ({
+    ...row,
+    rfqId: row.rfq_id ?? row.rfqId,
+    farmerId: row.farmer_id ?? row.farmerId,
+    farmerName: row.farmer_name ?? row.farmerName,
+    pricePerQuintal: Number(row.price_per_quintal ?? row.pricePerQuintal ?? 0),
+    deliveryDate: row.delivery_date ?? row.deliveryDate,
+    message: row.message ?? '',
+    requestOrder: Boolean(row.request_order ?? row.requestOrder),
+    requestedOrderPricePerQuintal: row.requested_order_price_per_quintal ?? row.requestedOrderPricePerQuintal ?? null,
+    orderId: row.order_id ?? row.orderId ?? null,
+    orderStatus: row.order_status ?? row.orderStatus ?? null,
+    createdAt: row.created_at ?? row.createdAt,
+  }));
+}
+
+export async function findB2bQuoteById(id: string) {
+  const res = await query<any>('SELECT * FROM b2b_quotes WHERE id = $1 LIMIT 1', [id]);
+  const row = res.rows[0];
+  if (!row) return null;
+  return {
+    ...row,
+    rfqId: row.rfq_id ?? row.rfqId,
+    farmerId: row.farmer_id ?? row.farmerId,
+    farmerName: row.farmer_name ?? row.farmerName,
+    pricePerQuintal: Number(row.price_per_quintal ?? row.pricePerQuintal ?? 0),
+    deliveryDate: row.delivery_date ?? row.deliveryDate,
+    message: row.message ?? '',
+    requestOrder: Boolean(row.request_order ?? row.requestOrder),
+    requestedOrderPricePerQuintal: row.requested_order_price_per_quintal ?? row.requestedOrderPricePerQuintal ?? null,
+    orderId: row.order_id ?? row.orderId ?? null,
+    orderStatus: row.order_status ?? row.orderStatus ?? null,
+    createdAt: row.created_at ?? row.createdAt,
+  };
+}
+
+export async function insertB2bQuote(input: {
+  id: string;
+  rfqId: string;
+  farmerId: string;
+  farmerName: string;
+  pricePerQuintal: number;
+  deliveryDate?: string | null;
+  message?: string | null;
+  requestOrder?: boolean;
+  requestedOrderPricePerQuintal?: number | null;
+  status?: string;
+}) {
+  await query(
+    `INSERT INTO b2b_quotes (id, rfq_id, farmer_id, farmer_name, price_per_quintal, delivery_date, message, request_order, requested_order_price_per_quintal, status)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+     ON CONFLICT (id) DO UPDATE SET
+      rfq_id = EXCLUDED.rfq_id,
+      farmer_id = EXCLUDED.farmer_id,
+      farmer_name = EXCLUDED.farmer_name,
+      price_per_quintal = EXCLUDED.price_per_quintal,
+      delivery_date = EXCLUDED.delivery_date,
+      message = EXCLUDED.message,
+      request_order = EXCLUDED.request_order,
+      requested_order_price_per_quintal = EXCLUDED.requested_order_price_per_quintal,
+      status = EXCLUDED.status`,
+    [input.id, input.rfqId, input.farmerId, input.farmerName, input.pricePerQuintal, input.deliveryDate ?? null, input.message ?? null, input.requestOrder ?? false, input.requestedOrderPricePerQuintal ?? null, input.status ?? 'PENDING'],
+  );
+}
+
+export async function updateB2bQuoteStatus(id: string, status: string) {
+  await query('UPDATE b2b_quotes SET status = $1 WHERE id = $2', [status, id]);
+}
+
+export async function listEarningsByFarmer(farmerId: string) {
+  const res = await query<any>('SELECT * FROM earnings_ledger WHERE farmer_id = $1 ORDER BY date DESC', [farmerId]);
+  return res.rows;
+}
+
+export async function insertEarningsEntry(input: { id: string; farmerId: string; orderId: string; aswamithraSaleValue: number; localMandiValue: number; extraEarnedAmount: number; date: string }) {
+  await query(
+    `INSERT INTO earnings_ledger (id, farmer_id, order_id, aswamithra_sale_value, local_mandi_value, extra_earned_amount, date)
+     VALUES ($1,$2,$3,$4,$5,$6,$7)
+     ON CONFLICT (id) DO UPDATE SET
+      farmer_id = EXCLUDED.farmer_id,
+      order_id = EXCLUDED.order_id,
+      aswamithra_sale_value = EXCLUDED.aswamithra_sale_value,
+      local_mandi_value = EXCLUDED.local_mandi_value,
+      extra_earned_amount = EXCLUDED.extra_earned_amount,
+      date = EXCLUDED.date`,
+    [input.id, input.farmerId, input.orderId, input.aswamithraSaleValue, input.localMandiValue, input.extraEarnedAmount, input.date],
+  );
+}
+
+export async function listPayments() {
+  const res = await query('SELECT * FROM payments ORDER BY created_at DESC');
+  return res.rows;
+}
+
+export async function listPayoutsByFarmer(farmerId: string) {
+  const res = await query(
+    `SELECT p.* FROM payments p
+     JOIN orders o ON o.id = p.order_id
+     WHERE o.seller_id = $1
+     ORDER BY p.created_at DESC`,
+    [farmerId],
+  );
+  return res.rows;
+}
+
+export async function insertPayment(input: {
+  id: string;
+  orderId: string;
+  amount: number;
+  razorpayPaymentId: string;
+  farmerShare: number;
+  platformCommission: number;
+  status?: string;
+}) {
+  await query(
+    `INSERT INTO payments (id, order_id, amount, razorpay_payment_id, farmer_share, platform_commission, status)
+     VALUES ($1,$2,$3,$4,$5,$6,$7)
+     ON CONFLICT (id) DO UPDATE SET
+      order_id = EXCLUDED.order_id,
+      amount = EXCLUDED.amount,
+      razorpay_payment_id = EXCLUDED.razorpay_payment_id,
+      farmer_share = EXCLUDED.farmer_share,
+      platform_commission = EXCLUDED.platform_commission,
+      status = EXCLUDED.status`,
+    [input.id, input.orderId, input.amount, input.razorpayPaymentId, input.farmerShare, input.platformCommission, input.status ?? 'PAID'],
+  );
+}
+
+export async function listReviewsByFarmerId(farmerId: string) {
+  const res = await query('SELECT * FROM reviews WHERE farmer_id = $1 ORDER BY created_at DESC', [farmerId]);
+  return res.rows;
+}
+
+export async function listReviewsByProductId(productId: string) {
+  const res = await query('SELECT * FROM reviews WHERE product_id = $1 ORDER BY created_at DESC', [productId]);
+  return res.rows;
+}
+
+export async function findReviewById(id: string) {
+  const res = await query('SELECT * FROM reviews WHERE id = $1 LIMIT 1', [id]);
+  return res.rows[0] ?? null;
+}
+
+export async function upsertReview(input: {
+  id: string;
+  farmerId: string;
+  productId: string;
+  customerName: string;
+  rating: number;
+  comment?: string | null;
+}) {
+  await query(
+    `INSERT INTO reviews (id, farmer_id, product_id, customer_name, rating, comment)
+     VALUES ($1,$2,$3,$4,$5,$6)
+     ON CONFLICT (id) DO UPDATE SET
+      farmer_id = EXCLUDED.farmer_id,
+      product_id = EXCLUDED.product_id,
+      customer_name = EXCLUDED.customer_name,
+      rating = EXCLUDED.rating,
+      comment = EXCLUDED.comment`,
+    [input.id, input.farmerId, input.productId, input.customerName, input.rating, input.comment ?? null],
+  );
+}
+
+export async function deleteReviewById(id: string) {
+  await query('DELETE FROM reviews WHERE id = $1', [id]);
+}
+
+export async function listDisputesByCustomer(customerId?: string) {
+  const sql = customerId ? 'SELECT * FROM disputes WHERE customer_id = $1 ORDER BY created_at DESC' : 'SELECT * FROM disputes ORDER BY created_at DESC';
+  const res = customerId ? await query(sql, [customerId]) : await query(sql);
+  return res.rows;
+}
+
+export async function listDisputesByFarmer(farmerId?: string) {
+  const sql = farmerId ? `SELECT d.* FROM disputes d JOIN orders o ON o.id = d.order_id WHERE o.seller_id = $1 ORDER BY d.created_at DESC` : 'SELECT * FROM disputes ORDER BY created_at DESC';
+  const res = farmerId ? await query(sql, [farmerId]) : await query(sql);
+  return res.rows;
+}
+
+export async function findDisputeById(id: string) {
+  const res = await query('SELECT * FROM disputes WHERE id = $1 LIMIT 1', [id]);
+  return res.rows[0] ?? null;
+}
+
+export async function upsertDispute(input: {
+  id: string;
+  orderId: string;
+  customerId: string;
+  customerName: string;
+  farmerName: string;
+  reason: string;
+  status?: string;
+  resolution?: string | null;
+  orderTotal?: number | null;
+}) {
+  await query(
+    `INSERT INTO disputes (id, order_id, customer_id, customer_name, farmer_name, reason, status, resolution)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+     ON CONFLICT (id) DO UPDATE SET
+      order_id = EXCLUDED.order_id,
+      customer_id = EXCLUDED.customer_id,
+      customer_name = EXCLUDED.customer_name,
+      farmer_name = EXCLUDED.farmer_name,
+      reason = EXCLUDED.reason,
+      status = EXCLUDED.status,
+      resolution = EXCLUDED.resolution`,
+    [input.id, input.orderId, input.customerId, input.customerName, input.farmerName, input.reason, input.status ?? 'OPEN', input.resolution ?? null],
+  );
+}
+
+export async function deleteDisputeById(id: string) {
+  await query('DELETE FROM disputes WHERE id = $1', [id]);
+}
+
+export async function listCategories() {
+  const res = await query<any>('SELECT * FROM categories ORDER BY name ASC');
+  return res.rows;
+}
+
+export async function insertCategory(input: { id: string; name: string; slug: string; icon: string }) {
+  await query(
+    `INSERT INTO categories (id, name, slug, icon) VALUES ($1,$2,$3,$4)
+     ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, slug = EXCLUDED.slug, icon = EXCLUDED.icon`,
+    [input.id, input.name, input.slug, input.icon],
+  );
+}
+
+export async function listUnits() {
+  const res = await query<any>('SELECT * FROM units ORDER BY label ASC');
+  return res.rows;
+}
+
+export async function insertUnit(input: { id: string; code: string; label: string }) {
+  await query(
+    `INSERT INTO units (id, code, label) VALUES ($1,$2,$3)
+     ON CONFLICT (id) DO UPDATE SET code = EXCLUDED.code, label = EXCLUDED.label`,
+    [input.id, input.code, input.label],
+  );
+}
+
+export async function listCommissionSlabs() {
+  const res = await query<any>('SELECT * FROM commission_slabs ORDER BY min_amount ASC');
+  return res.rows;
+}
+
+export async function insertCommissionSlab(input: { id: string; minAmount: number; maxAmount: number; ratePercent: number; applicableCategory: string; applicableRegion: string }) {
+  await query(
+    `INSERT INTO commission_slabs (id, min_amount, max_amount, rate_percent, applicable_category, applicable_region)
+     VALUES ($1,$2,$3,$4,$5,$6)
+     ON CONFLICT (id) DO UPDATE SET
+      min_amount = EXCLUDED.min_amount,
+      max_amount = EXCLUDED.max_amount,
+      rate_percent = EXCLUDED.rate_percent,
+      applicable_category = EXCLUDED.applicable_category,
+      applicable_region = EXCLUDED.applicable_region`,
+    [input.id, input.minAmount, input.maxAmount, input.ratePercent, input.applicableCategory, input.applicableRegion],
+  );
+}
+
+export async function listMarketPrices() {
+  const res = await query<any>('SELECT * FROM market_prices ORDER BY crop_name ASC');
+  return res.rows;
+}
+
+export async function insertMarketPrice(input: { id: string; cropName: string; category: string; region: string; referencePrice: number; unit: string; isPublished?: boolean }) {
+  await query(
+    `INSERT INTO market_prices (id, crop_name, category, region, reference_price, unit, is_published)
+     VALUES ($1,$2,$3,$4,$5,$6,$7)
+     ON CONFLICT (id) DO UPDATE SET
+      crop_name = EXCLUDED.crop_name,
+      category = EXCLUDED.category,
+      region = EXCLUDED.region,
+      reference_price = EXCLUDED.reference_price,
+      unit = EXCLUDED.unit,
+      is_published = EXCLUDED.is_published`,
+    [input.id, input.cropName, input.category, input.region, input.referencePrice, input.unit, input.isPublished ?? true],
+  );
+}
+
+export async function listServiceLocations() {
+  const res = await query<any>('SELECT * FROM service_locations ORDER BY state ASC, district ASC, city ASC');
+  return res.rows;
+}
+
+export async function insertServiceLocation(input: { id: string; state: string; district: string; city: string; status?: string; lat?: number | null; lng?: number | null; activeFarmers?: number | null; activeHubs?: number | null }) {
+  await query(
+    `INSERT INTO service_locations (id, state, district, city, status, lat, lng, active_farmers, active_hubs)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+     ON CONFLICT (id) DO UPDATE SET
+      state = EXCLUDED.state,
+      district = EXCLUDED.district,
+      city = EXCLUDED.city,
+      status = EXCLUDED.status,
+      lat = EXCLUDED.lat,
+      lng = EXCLUDED.lng,
+      active_farmers = EXCLUDED.active_farmers,
+      active_hubs = EXCLUDED.active_hubs`,
+    [input.id, input.state, input.district, input.city, input.status ?? 'active', input.lat ?? null, input.lng ?? null, input.activeFarmers ?? null, input.activeHubs ?? null],
+  );
+}
+
 export function toStoreUser(row: DbUserRow) {
   return {
     id: row.id,
@@ -898,9 +1537,9 @@ export function toStoreShop(row: DbShopRow) {
   } as const;
 }
 
-export async function getSiteConfig(): Promise<{ mapLat: number; mapLng: number; mapAddress: string }> {
+export async function getSiteConfig(): Promise<{ mapLat: number; mapLng: number; mapAddress: string; commissionRatePercent: number }> {
   const res = await query<{ key: string; value: string }>(
-    `SELECT key, value FROM site_config WHERE key IN ('mapLat','mapLng','mapAddress')`
+    `SELECT key, value FROM site_config WHERE key IN ('mapLat','mapLng','mapAddress','commissionRatePercent')`
   );
   const map: Record<string, string> = {};
   for (const row of res.rows) {
@@ -910,14 +1549,16 @@ export async function getSiteConfig(): Promise<{ mapLat: number; mapLng: number;
     mapLat: map.mapLat ? Number(map.mapLat) : 16.5062,
     mapLng: map.mapLng ? Number(map.mapLng) : 80.6480,
     mapAddress: map.mapAddress ?? 'Vijayawada, Andhra Pradesh',
+    commissionRatePercent: map.commissionRatePercent ? Number(map.commissionRatePercent) : 4.5,
   };
 }
 
-export async function updateSiteConfig(input: { mapLat?: number; mapLng?: number; mapAddress?: string }) {
+export async function updateSiteConfig(input: { mapLat?: number; mapLng?: number; mapAddress?: string; commissionRatePercent?: number }) {
   const rows: Array<[string, string]> = [];
   if (input.mapLat != null) rows.push(['mapLat', String(input.mapLat)]);
   if (input.mapLng != null) rows.push(['mapLng', String(input.mapLng)]);
   if (input.mapAddress != null) rows.push(['mapAddress', input.mapAddress]);
+  if (input.commissionRatePercent != null) rows.push(['commissionRatePercent', String(input.commissionRatePercent)]);
   for (const [key, value] of rows) {
     await query(
       `INSERT INTO site_config (key, value) VALUES ($1, $2)
@@ -928,7 +1569,15 @@ export async function updateSiteConfig(input: { mapLat?: number; mapLng?: number
     if (key === 'mapLat') db.mapLat = Number(value);
     else if (key === 'mapLng') db.mapLng = Number(value);
     else if (key === 'mapAddress') db.mapAddress = value;
+    else if (key === 'commissionRatePercent') db.commissionRatePercent = Number(value);
   }
+}
+
+export async function getCommissionRatePercent(amount: number) {
+  const cfg = await getSiteConfig();
+  const slabResult = await query('SELECT rate_percent, min_amount, max_amount FROM commission_slabs ORDER BY min_amount ASC');
+  const slab = (slabResult.rows as Array<{ rate_percent: string; min_amount: string; max_amount: string }>).find((row) => amount >= Number(row.min_amount) && amount <= Number(row.max_amount));
+  return slab ? Number(slab.rate_percent) : cfg.commissionRatePercent;
 }
 
 
@@ -975,7 +1624,12 @@ export async function seedFromMemoryIfEmpty() {
 
     const addressCount = await countRows('user_addresses');
     if (addressCount === 0) {
+      const userRows = await query<{ id: string }>('SELECT id FROM users');
+      const existingUserIds = new Set(userRows.rows.map((row) => row.id));
       for (const address of db.addresses) {
+        if (!existingUserIds.has(address.userId)) {
+          continue;
+        }
         await insertAddress({
           id: address.id,
           userId: address.userId,

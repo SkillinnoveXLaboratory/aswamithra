@@ -1,5 +1,5 @@
 import { NavLink, useHistory } from 'react-router-dom';
-import { Bell, Leaf, LogOut, Menu, Search, X } from 'lucide-react';
+import { Bell, Leaf, LogOut, Menu, Search, ShieldCheck, X } from 'lucide-react';
 import { useState } from 'react';
 import { useAuth } from '../context/AuthContext.jsx';
 
@@ -7,6 +7,13 @@ export default function PortalLayout({ role, title, subtitle, nav, children, acc
   const [open, setOpen] = useState(false);
   const { user, logout } = useAuth();
   const history = useHistory();
+
+  const groupedNav = nav.reduce((acc, item) => {
+    const group = item.group || 'Main';
+    if (!acc[group]) acc[group] = [];
+    acc[group].push(item);
+    return acc;
+  }, {});
 
   const handleLogout = async () => {
     await logout();
@@ -18,7 +25,7 @@ export default function PortalLayout({ role, title, subtitle, nav, children, acc
       <aside className={open ? 'portal-sidebar open' : 'portal-sidebar'}>
         <div className="portal-brand">
           <Leaf size={30} />
-          <div>
+          <div className="portal-brand-copy">
             <strong>Aswamithra</strong>
             <span>{role} portal</span>
           </div>
@@ -26,13 +33,25 @@ export default function PortalLayout({ role, title, subtitle, nav, children, acc
             <X />
           </button>
         </div>
-        <div className="quick-action">New farm-direct task</div>
+        <div className="portal-badge">
+          <ShieldCheck size={16} />
+          <span>{user?.status === 'active' ? 'Active account' : user?.status || 'Verified access'}</span>
+        </div>
+        <div className="quick-action">Fast access to daily tasks</div>
         <nav className="portal-nav">
-          {nav.map((item) => (
-            <NavLink key={item.href} to={item.href} onClick={() => setOpen(false)}>
-              <item.icon size={19} />
-              <span>{item.label}</span>
-            </NavLink>
+          {Object.entries(groupedNav).map(([group, items]) => (
+            <div className="portal-nav-group" key={group}>
+              <span className="portal-nav-label">{group}</span>
+              {items.map((item) => (
+                <NavLink key={item.href} to={item.href} onClick={() => setOpen(false)}>
+                  <item.icon size={19} />
+                  <div className="portal-nav-copy">
+                    <strong>{item.label}</strong>
+                    {item.hint ? <span>{item.hint}</span> : null}
+                  </div>
+                </NavLink>
+              ))}
+            </div>
           ))}
         </nav>
         <button className="logout-btn" type="button" onClick={handleLogout}>

@@ -15,13 +15,14 @@ import { useAuth } from '../context/AuthContext.jsx';
 import { Edit2, Trash2, X } from 'lucide-react';
 
 const nav = [
-  { label: 'Dashboard', href: '/farmer/home', icon: Home },
-  { label: 'My Shop', href: '/farmer/my-shop', icon: Store },
-  { label: 'Products', href: '/farmer/products', icon: Wheat },
-  { label: 'Orders', href: '/farmer/orders', icon: ClipboardCheck },
-  { label: 'Earnings', href: '/farmer/earnings', icon: Wallet },
-  { label: 'KYC/Profile', href: '/farmer/profile', icon: UserCheck },
-  { label: 'RFQs', href: '/farmer/rfqs', icon: Send },
+  { group: 'Overview', label: 'Dashboard', href: '/farmer/home', icon: Home, hint: 'Today’s orders, earnings, and alerts' },
+  { group: 'Store', label: 'My Shop', href: '/farmer/my-shop', icon: Store, hint: 'Set shop name, location, and hours' },
+  { group: 'Store', label: 'Products', href: '/farmer/products', icon: Wheat, hint: 'Add, edit, pause, and stock items' },
+  { group: 'Store', label: 'Plants', href: '/farmer/plants', icon: Sprout, hint: 'Leaf view of customer and B2B order counts' },
+  { group: 'Orders', label: 'Orders', href: '/farmer/orders', icon: ClipboardCheck, hint: 'Accept, pack, and dispatch orders' },
+  { group: 'Finance', label: 'Earnings', href: '/farmer/earnings', icon: Wallet, hint: 'Payouts, extra earnings, and statements' },
+  { group: 'Account', label: 'KYC/Profile', href: '/farmer/profile', icon: UserCheck, hint: 'Verification and bank status' },
+  { group: 'Bulk', label: 'RFQs', href: '/farmer/rfqs', icon: Send, hint: 'Respond to wholesale quote requests' },
 ];
 
 function FarmerHome() {
@@ -35,8 +36,8 @@ function FarmerHome() {
         <StatCard label="Monthly earnings" value={money(data.monthlyEarnings ?? 0)} icon={Wallet} tone="orange" />
       </div>
       <section className="panel">
-        <h2>Farmer work queue</h2>
-        {['Check KYC status', 'Keep product stock updated', 'Accept new orders quickly', 'Pack and dispatch', 'Review payout statement'].map((item, index) => (
+        <h2>Daily workflow</h2>
+        {['Check KYC and bank status', 'Keep product stock updated', 'Add or pause products', 'Accept new orders quickly', 'Pack, dispatch, and review payouts'].map((item, index) => (
           <div className="step-line" key={item}><span>{index + 1}</span>{item}</div>
         ))}
       </section>
@@ -268,14 +269,110 @@ function FarmerOrders() {
   const { user } = useAuth();
   const { data, setData } = useApi(() => endpoints.farmerOrders(user?.id), [], [user?.id]);
   const refresh = async () => setData(unwrap(await endpoints.farmerOrders(user?.id)));
+  const paidTone = (value) => (value === 'PAID' ? 'good' : 'warn');
   const actionFor = (row) => (
-    <div className="action-row">
-      <button className="btn btn-light" onClick={async () => { await endpoints.acceptOrder(row.id); await refresh(); }}>Accept</button>
-      <button className="btn btn-light" onClick={async () => { await endpoints.packOrder(row.id); await refresh(); }}>Pack</button>
-      <button className="btn btn-light" onClick={async () => { await endpoints.outForDelivery(row.id); await refresh(); }}>Dispatch</button>
+    <div className="action-row" style={{ alignItems: 'center' }}>
+      <button className="btn btn-light btn-compact farmer-action" onClick={async () => { await endpoints.acceptOrder(row.id); await refresh(); }}>Accept</button>
+      <button className="btn btn-light btn-compact farmer-action" onClick={async () => { await endpoints.packOrder(row.id); await refresh(); }}>Pack</button>
+      <button className="btn btn-light btn-compact farmer-action" onClick={async () => { await endpoints.outForDelivery(row.id); await refresh(); }}>Dispatch</button>
+      <label className="payment-select-wrap">
+        <span className="payment-select-label">Paid</span>
+        <select
+          className={`payment-select ${paidTone(row.paymentStatus || 'PENDING')}`}
+          value={row.paymentStatus || 'PENDING'}
+          disabled={row.paymentStatus === 'PAID'}
+          onChange={async (e) => { await endpoints.updateOrderPaymentStatus(row.id, e.target.value); await refresh(); }}
+        >
+          <option value="PENDING">Not Yet</option>
+          <option value="PAID">Success</option>
+        </select>
+      </label>
     </div>
   );
-  return <section className="panel"><h2>Orders to handle</h2><DataTable rows={data || []} columns={[{ key: 'id', label: 'Order' }, { key: 'totalAmount', label: 'Total', render: (row) => money(row.totalAmount) }, { key: 'farmerPayoutAmount', label: 'Payout', render: (row) => money(row.farmerPayoutAmount) }, { key: 'status', label: 'Status' }]} actions={actionFor} /></section>;
+  return (
+    <section className="panel">
+      <div className="panel-head-row">
+        <h2>Orders to handle</h2>
+        <span className="pill soft">{(data || []).length} live orders</span>
+      </div>
+      <DataTable
+        compact
+        rows={data || []}
+        columns={[
+          { key: 'id', label: 'Order' },
+          { key: 'totalAmount', label: 'Total', render: (row) => money(row.totalAmount) },
+          { key: 'farmerPayoutAmount', label: 'Payout', render: (row) => money(row.farmerPayoutAmount) },
+          { key: 'paymentStatus', label: 'Paid', render: (row) => <span className={`pill ${paidTone(row.paymentStatus || 'PENDING')}`}>{row.paymentStatus === 'PAID' ? 'Success' : 'Not Yet'}</span> },
+          { key: 'status', label: 'Status', render: (row) => <span className="pill soft">{row.status}</span> },
+        ]}
+        actions={actionFor}
+      />
+    </section>
+  );
+}
+
+function FarmerPlants() {
+  const { user } = useAuth();
+  const { data } = useApi(() => endpoints.farmerOrders(user?.id), [], [user?.id]);
+  const orders = Array.isArray(data) ? data : [];
+  const customerNodes = orders.map((order, index) => {
+    const buyerName = order.buyerName || order.customerName || order.companyName || 'Customer';
+    const count = Math.max(1, Number(order.qty || order.quantity || order.totalQty || 1));
+    return {
+      id: order.id,
+      name: buyerName,
+      orderId: order.id,
+      count,
+      lane: index % 2 === 0 ? 'left' : 'right',
+      tone: index % 3 === 0 ? 'one' : index % 3 === 1 ? 'two' : 'three',
+    };
+  });
+  const visibleNodes = customerNodes.slice(0, 10);
+
+  return (
+    <section className="panel plants-panel">
+      <div className="panel-head-row">
+        <h2>Plants</h2>
+        <span className="pill soft">{orders.length} orders</span>
+      </div>
+      <p className="muted">Each node is one customer or B2B buyer. The count badge shows how many orders that name has placed.</p>
+      <div className="plants-flow">
+        <div className="plants-flow-root">
+          <Sprout size={26} />
+          <strong>Farmer orders</strong>
+          <span>Flow by customer</span>
+        </div>
+        <div className="plants-flow-branches">
+          {visibleNodes.length ? visibleNodes.map((node) => (
+            <div className={`plants-flow-node ${node.lane}`} key={`${node.id}-node`} title={`${node.name} - Order ${node.orderId}`}>
+              <div className={`plants-flow-connector ${node.lane}`} />
+              <div className="plants-flow-card">
+                <strong>{node.name}</strong>
+                <span>{node.count} order{node.count > 1 ? 's' : ''}</span>
+                <small>{node.orderId}</small>
+              </div>
+            </div>
+          )) : null}
+          {visibleNodes.length ? null : (
+            <div className="plant-empty">
+              <Sprout size={26} />
+              <strong>No orders yet</strong>
+              <span>Customer flow nodes will appear here once orders are placed.</span>
+            </div>
+          )}
+        </div>
+      </div>
+      <div className="plant-list">
+        {orders.map((order) => (
+          <div className="plant-list-row" key={order.id}>
+            <strong>{order.buyerName || order.customerName || order.companyName || 'Customer'}</strong>
+            <span>{order.id}</span>
+            <span>{Math.max(1, Number(order.qty || order.quantity || order.totalQty || 1))} leaf order(s)</span>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
 }
 
 function FarmerEarnings() {
@@ -388,9 +485,146 @@ function FarmerProfile() {
 
 function FarmerRfqs() {
   const { user } = useAuth();
-  const { data } = useApi(() => endpoints.farmerRfqs(), [], []);
+  const { data: rfqs } = useApi(() => endpoints.farmerRfqs(user?.id, 50), [], [user?.id]);
+  const { data: quotes, setData: setQuotes } = useApi(() => endpoints.farmerQuotes(user?.id), [], [user?.id]);
+  const [selectedRfq, setSelectedRfq] = useState(null);
+  const [quoteForm, setQuoteForm] = useState({ message: '', requestOrder: false, pricePerQuintal: '', requestedOrderPricePerQuintal: '' });
   const [sent, setSent] = useState('');
-  return <section className="panel"><h2>Bulk RFQs</h2><DataTable rows={data || []} columns={[{ key: 'id', label: 'RFQ' }, { key: 'cropName', label: 'Crop' }, { key: 'quantityQuintals', label: 'Qty' }, { key: 'status', label: 'Status' }]} actions={(row) => <button className="btn btn-primary" onClick={async () => { await endpoints.submitQuote(row.id, { farmerId: user?.id, farmerName: user?.name, pricePerQuintal: 4600 }); setSent(row.id); }}>Quote</button>} />{sent ? <StateBlock type="success" title={`Quote submitted for ${sent}`} /> : null}</section>;
+
+  const openQuote = (row) => {
+    setSelectedRfq(row);
+    setQuoteForm({
+      message: '',
+      requestOrder: false,
+      pricePerQuintal: String(row.targetPricePerQuintal || ''),
+      requestedOrderPricePerQuintal: String(row.targetPricePerQuintal || ''),
+    });
+  };
+
+  const submitQuote = async (event) => {
+    event.preventDefault();
+    if (!selectedRfq) return;
+    const payload = {
+      farmerId: user?.id,
+      farmerName: user?.name,
+      message: quoteForm.message,
+      requestOrder: quoteForm.requestOrder,
+      pricePerQuintal: quoteForm.requestOrder ? quoteForm.requestedOrderPricePerQuintal : quoteForm.pricePerQuintal,
+      requestedOrderPricePerQuintal: quoteForm.requestOrder ? quoteForm.requestedOrderPricePerQuintal : undefined,
+    };
+    await endpoints.submitQuote(selectedRfq.id, payload);
+    setSent(selectedRfq.id);
+    setSelectedRfq(null);
+    setQuotes(unwrap(await endpoints.farmerQuotes(user?.id)));
+  };
+
+  const rejectQuote = async (quoteId) => {
+    await endpoints.rejectFarmerQuote(quoteId);
+    setQuotes(unwrap(await endpoints.farmerQuotes(user?.id)));
+  };
+
+  const cancelQuoteOrder = async (quoteId) => {
+    await endpoints.cancelQuoteOrder(quoteId);
+    setQuotes(unwrap(await endpoints.farmerQuotes(user?.id)));
+  };
+
+  return (
+    <section className="panel">
+      <h2>Bulk RFQs</h2>
+      <DataTable
+        rows={rfqs || []}
+        columns={[
+          { key: 'id', label: 'RFQ' },
+          { key: 'cropName', label: 'Crop' },
+          { key: 'targetPricePerQuintal', label: 'Target price', render: (row) => row.targetPricePerQuintal ? `Rs. ${row.targetPricePerQuintal}` : '—' },
+          { key: 'quantityQuintals', label: 'Qty' },
+          { key: 'distanceKm', label: 'Distance', render: (row) => row.distanceKm != null ? `${row.distanceKm} km` : 'Nearby' },
+          { key: 'status', label: 'Status' },
+        ]}
+        actions={(row) => <button className="btn btn-primary" onClick={() => openQuote(row)}>Quote</button>}
+      />
+
+      <div className="mt-6">
+        <h3>My Quotes</h3>
+        <DataTable
+          rows={quotes || []}
+          columns={[
+            { key: 'rfqId', label: 'RFQ' },
+            { key: 'farmerName', label: 'Farmer' },
+            { key: 'pricePerQuintal', label: 'Price', render: (row) => `Rs. ${row.pricePerQuintal}` },
+            { key: 'message', label: 'Message', render: (row) => row.message || '—' },
+            { key: 'requestOrder', label: 'Order req', render: (row) => row.requestOrder ? 'Yes' : 'No' },
+            { key: 'orderStatus', label: 'Order', render: (row) => row.orderStatus || row.order_status || 'Not yet' },
+            { key: 'status', label: 'Status' },
+          ]}
+          actions={(row) => (
+            row.orderStatus === 'PLACED' || row.order_status === 'PLACED' || row.orderId || row.order_id
+              ? <button className="btn btn-light" onClick={() => cancelQuoteOrder(row.id)}>Cancel order</button>
+              : row.status === 'ACCEPTED'
+                ? <button className="btn btn-light" onClick={() => rejectQuote(row.id)}>Reject</button>
+                : <span className="pill soft">{row.status}</span>
+          )}
+          empty="No quotes yet."
+        />
+      </div>
+
+      {selectedRfq ? (
+        <div className="modal-backdrop" role="presentation" onClick={() => setSelectedRfq(null)}>
+          <section className="modal" role="dialog" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-head">
+              <h2>Quote Message</h2>
+              <button className="icon-only" type="button" onClick={() => setSelectedRfq(null)}>×</button>
+            </div>
+            <form className="form-grid single" onSubmit={submitQuote}>
+              <div className="notice">
+                {selectedRfq.cropName} | Target: {selectedRfq.targetPricePerQuintal ? `Rs. ${selectedRfq.targetPricePerQuintal}` : 'Not set'}
+              </div>
+              <label className="field-label">
+                <input
+                  type="checkbox"
+                  checked={quoteForm.requestOrder}
+                  onChange={(e) => setQuoteForm({ ...quoteForm, requestOrder: e.target.checked })}
+                /> Request Order
+              </label>
+              {quoteForm.requestOrder ? (
+                <FormField
+                  label="Requested order price / quintal"
+                  name="requestedOrderPricePerQuintal"
+                  type="number"
+                  value={quoteForm.requestedOrderPricePerQuintal}
+                  onChange={(e) => setQuoteForm({ ...quoteForm, requestedOrderPricePerQuintal: e.target.value })}
+                  required
+                />
+              ) : (
+                <FormField
+                  label="Quote price / quintal"
+                  name="pricePerQuintal"
+                  type="number"
+                  value={quoteForm.pricePerQuintal}
+                  onChange={(e) => setQuoteForm({ ...quoteForm, pricePerQuintal: e.target.value })}
+                  required
+                />
+              )}
+              <FormField
+                label="Message"
+                name="message"
+                type="textarea"
+                value={quoteForm.message}
+                onChange={(e) => setQuoteForm({ ...quoteForm, message: e.target.value })}
+                placeholder="Add quality, timing, or delivery note"
+              />
+              <div className="modal-actions">
+                <button className="btn btn-primary" type="submit">Send Quote</button>
+                <button className="btn btn-light" type="button" onClick={() => setSelectedRfq(null)}>Cancel</button>
+              </div>
+            </form>
+          </section>
+        </div>
+      ) : null}
+
+      {sent ? <StateBlock type="success" title={`Quote submitted for ${sent}`} /> : null}
+    </section>
+  );
 }
 
 export default function FarmerPortal() {
@@ -401,6 +635,7 @@ export default function FarmerPortal() {
         <Route path="/farmer/home" component={FarmerHome} />
         <Route path="/farmer/my-shop" component={FarmerMyShop} />
         <Route path="/farmer/products" component={FarmerProducts} />
+        <Route path="/farmer/plants" component={FarmerPlants} />
         <Route path="/farmer/orders" component={FarmerOrders} />
         <Route path="/farmer/earnings" component={FarmerEarnings} />
         <Route path="/farmer/payouts" component={FarmerEarnings} />
@@ -410,3 +645,4 @@ export default function FarmerPortal() {
     </FarmerLayout>
   );
 }
+

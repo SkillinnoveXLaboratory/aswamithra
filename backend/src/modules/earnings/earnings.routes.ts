@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { sendSuccess } from '../../utils/response';
-import { db } from '../../store/db.store';
+import { listEarningsByFarmer, listAllProducts, listOrdersBySeller, insertEarningsEntry, query } from '../../services/sql-store';
 
 const router = Router();
 
@@ -21,44 +21,46 @@ function emptyDashboard() {
 }
 
 router.get('/farmer/dashboard', (req: Request, res: Response) => {
+  void (async () => {
   const farmerId = req.query.farmerId as string;
   if (!farmerId) {
     return sendSuccess(res, 200, 'Farmer dashboard summary', emptyDashboard());
   }
 
-  const farmerOrders = db.orders.filter((o) => o.sellerId === farmerId);
-  const farmerEarnings = db.earningsLedger.filter((e) => e.farmerId === farmerId);
+  const farmerOrders = await listOrdersBySeller(farmerId);
+  const farmerEarnings = await listEarningsByFarmer(farmerId);
   const todayKey = new Date().toISOString().slice(0, 10);
   const monthKey = todayKey.slice(0, 7);
 
-  const todayOrders = farmerOrders.filter((o) => o.createdAt.startsWith(todayKey)).length;
-  const pendingOrders = farmerOrders.filter((o) => PENDING_ORDER_STATUSES.includes(o.status)).length;
+  const todayOrders = farmerOrders.filter((o: any) => String(o.created_at).startsWith(todayKey)).length;
+  const pendingOrders = farmerOrders.filter((o: any) => PENDING_ORDER_STATUSES.includes(o.status)).length;
   const monthlyEarnings = farmerOrders
-    .filter((o) => o.createdAt.startsWith(monthKey) && o.status === 'DELIVERED')
-    .reduce((acc, o) => acc + (o.farmerPayoutAmount || o.totalAmount), 0);
+    .filter((o: any) => String(o.created_at).startsWith(monthKey) && o.status === 'DELIVERED')
+    .reduce((acc: number, o: any) => acc + (Number(o.farmer_payout_amount) || Number(o.total_amount)), 0);
   const todaySales = farmerOrders
-    .filter((o) => o.createdAt.startsWith(todayKey))
-    .reduce((acc, o) => acc + o.totalAmount, 0);
-  const extraEarnedLifetime = farmerEarnings.reduce((acc, e) => acc + e.extraEarnedAmount, 0);
+    .filter((o: any) => String(o.created_at).startsWith(todayKey))
+    .reduce((acc: number, o: any) => acc + Number(o.total_amount), 0);
+  const extraEarnedLifetime = farmerEarnings.reduce((acc: number, e: any) => acc + Number(e.extra_earned_amount), 0);
   const extraEarnedThisMonth = farmerEarnings
-    .filter((e) => e.date.startsWith(monthKey))
-    .reduce((acc, e) => acc + e.extraEarnedAmount, 0);
-  const lowStockAlerts = db.products.filter((p) => p.sellerId === farmerId && p.stock <= 10);
+    .filter((e: any) => String(e.date).startsWith(monthKey))
+    .reduce((acc: number, e: any) => acc + Number(e.extra_earned_amount), 0);
+  const lowStockAlerts = (await listAllProducts()).filter((p: any) => p.seller_id === farmerId && p.stock <= 10);
 
   sendSuccess(res, 200, 'Farmer dashboard summary', {
     todayOrders,
     pendingOrders,
     monthlyEarnings: Math.round(monthlyEarnings * 100) / 100,
     todaySales: Math.round(todaySales * 100) / 100,
-    newOrdersCount: farmerOrders.filter((o) => o.status === 'PLACED').length,
+    newOrdersCount: farmerOrders.filter((o: any) => o.status === 'PLACED').length,
     extraEarnedLifetime: Math.round(extraEarnedLifetime * 100) / 100,
     extraEarnedThisMonth: Math.round(extraEarnedThisMonth * 100) / 100,
-    completedOrdersCount: farmerOrders.filter((o) => o.status === 'DELIVERED').length,
+    completedOrdersCount: farmerOrders.filter((o: any) => o.status === 'DELIVERED').length,
     lowStockAlerts,
   });
+  })();
 });
 
-router.get('/farmer/earnings', (req: Request, res: Response) => {
+router.get('/farmer/earnings', async (req: Request, res: Response) => {
   const farmerId = req.query.farmerId as string;
   if (!farmerId) {
     return sendSuccess(res, 200, 'Extra earnings ledger summary', {
@@ -68,8 +70,8 @@ router.get('/farmer/earnings', (req: Request, res: Response) => {
     });
   }
 
-  const farmerEarnings = db.earningsLedger.filter((e) => e.farmerId === farmerId);
-  const totalExtraIncomeEarned = farmerEarnings.reduce((acc, e) => acc + e.extraEarnedAmount, 0);
+  const farmerEarnings = await listEarningsByFarmer(farmerId);
+  const totalExtraIncomeEarned = farmerEarnings.reduce((acc: number, e: any) => acc + Number(e.extra_earned_amount), 0);
 
   sendSuccess(res, 200, 'Extra earnings ledger summary', {
     totalExtraIncomeEarned: Math.round(totalExtraIncomeEarned * 100) / 100,
@@ -79,17 +81,17 @@ router.get('/farmer/earnings', (req: Request, res: Response) => {
   });
 });
 
-router.get('/farmer/earnings/history', (req: Request, res: Response) => {
+router.get('/farmer/earnings/history', async (req: Request, res: Response) => {
   const farmerId = req.query.farmerId as string;
-  const farmerEarnings = farmerId ? db.earningsLedger.filter((e) => e.farmerId === farmerId) : [];
+  const farmerEarnings = farmerId ? await listEarningsByFarmer(farmerId) : [];
   sendSuccess(res, 200, 'Line-item extra earnings breakdown', farmerEarnings);
 });
 
-router.get('/admin/farmers/earnings-ledger', (req: Request, res: Response) => {
-  sendSuccess(res, 200, 'All farmer earnings ledger entries', db.earningsLedger);
+router.get('/admin/farmers/earnings-ledger', async (req: Request, res: Response) => {
+  sendSuccess(res, 200, 'All farmer earnings ledger entries', await query('SELECT * FROM earnings_ledger ORDER BY date DESC'));
 });
 
-router.post('/admin/farmers/earnings-ledger', (req: Request, res: Response) => {
+router.post('/admin/farmers/earnings-ledger', async (req: Request, res: Response) => {
   const newEntry = {
     id: 'ern_' + Date.now(),
     farmerId: req.body.farmerId || 'farmer_881',
@@ -99,13 +101,12 @@ router.post('/admin/farmers/earnings-ledger', (req: Request, res: Response) => {
     extraEarnedAmount: parseFloat(req.body.extraEarnedAmount) || 100,
     date: new Date().toISOString().split('T')[0],
   };
-  db.earningsLedger.push(newEntry);
+  await insertEarningsEntry(newEntry);
   sendSuccess(res, 201, 'Earnings entry created manually by Admin', newEntry);
 });
 
-router.delete('/admin/farmers/earnings-ledger/:id', (req: Request, res: Response) => {
-  const index = db.earningsLedger.findIndex((e) => e.id === req.params.id);
-  if (index !== -1) db.earningsLedger.splice(index, 1);
+router.delete('/admin/farmers/earnings-ledger/:id', async (req: Request, res: Response) => {
+  await query('DELETE FROM earnings_ledger WHERE id = $1', [req.params.id]);
   sendSuccess(res, 200, 'Earnings entry deleted', { id: req.params.id });
 });
 
