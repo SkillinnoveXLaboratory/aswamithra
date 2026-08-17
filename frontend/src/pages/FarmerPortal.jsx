@@ -1,5 +1,5 @@
 import { Redirect, Route, Switch } from 'react-router-dom';
-import { ClipboardCheck, Home, PackagePlus, Send, Sprout, Store, UserCheck, Wallet, Wheat } from 'lucide-react';
+import { ClipboardCheck, Home, PackagePlus, Send, Store, UserCheck, Wallet, Wheat } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import FarmerLayout from '../layouts/FarmerLayout.jsx';
 import DataTable from '../components/DataTable.jsx';
@@ -18,7 +18,6 @@ const nav = [
   { group: 'Overview', label: 'Dashboard', href: '/farmer/home', icon: Home, hint: 'Today’s orders, earnings, and alerts' },
   { group: 'Store', label: 'My Shop', href: '/farmer/my-shop', icon: Store, hint: 'Set shop name, location, and hours' },
   { group: 'Store', label: 'Products', href: '/farmer/products', icon: Wheat, hint: 'Add, edit, pause, and stock items' },
-  { group: 'Store', label: 'Plants', href: '/farmer/plants', icon: Sprout, hint: 'Leaf view of customer and B2B order counts' },
   { group: 'Orders', label: 'Orders', href: '/farmer/orders', icon: ClipboardCheck, hint: 'Accept, pack, and dispatch orders' },
   { group: 'Finance', label: 'Earnings', href: '/farmer/earnings', icon: Wallet, hint: 'Payouts, extra earnings, and statements' },
   { group: 'Account', label: 'KYC/Profile', href: '/farmer/profile', icon: UserCheck, hint: 'Verification and bank status' },
@@ -311,70 +310,6 @@ function FarmerOrders() {
   );
 }
 
-function FarmerPlants() {
-  const { user } = useAuth();
-  const { data } = useApi(() => endpoints.farmerOrders(user?.id), [], [user?.id]);
-  const orders = Array.isArray(data) ? data : [];
-  const customerNodes = orders.map((order, index) => {
-    const buyerName = order.buyerName || order.customerName || order.companyName || 'Customer';
-    const count = Math.max(1, Number(order.qty || order.quantity || order.totalQty || 1));
-    return {
-      id: order.id,
-      name: buyerName,
-      orderId: order.id,
-      count,
-      lane: index % 2 === 0 ? 'left' : 'right',
-      tone: index % 3 === 0 ? 'one' : index % 3 === 1 ? 'two' : 'three',
-    };
-  });
-  const visibleNodes = customerNodes.slice(0, 10);
-
-  return (
-    <section className="panel plants-panel">
-      <div className="panel-head-row">
-        <h2>Plants</h2>
-        <span className="pill soft">{orders.length} orders</span>
-      </div>
-      <p className="muted">Each node is one customer or B2B buyer. The count badge shows how many orders that name has placed.</p>
-      <div className="plants-flow">
-        <div className="plants-flow-root">
-          <Sprout size={26} />
-          <strong>Farmer orders</strong>
-          <span>Flow by customer</span>
-        </div>
-        <div className="plants-flow-branches">
-          {visibleNodes.length ? visibleNodes.map((node) => (
-            <div className={`plants-flow-node ${node.lane}`} key={`${node.id}-node`} title={`${node.name} - Order ${node.orderId}`}>
-              <div className={`plants-flow-connector ${node.lane}`} />
-              <div className="plants-flow-card">
-                <strong>{node.name}</strong>
-                <span>{node.count} order{node.count > 1 ? 's' : ''}</span>
-                <small>{node.orderId}</small>
-              </div>
-            </div>
-          )) : null}
-          {visibleNodes.length ? null : (
-            <div className="plant-empty">
-              <Sprout size={26} />
-              <strong>No orders yet</strong>
-              <span>Customer flow nodes will appear here once orders are placed.</span>
-            </div>
-          )}
-        </div>
-      </div>
-      <div className="plant-list">
-        {orders.map((order) => (
-          <div className="plant-list-row" key={order.id}>
-            <strong>{order.buyerName || order.customerName || order.companyName || 'Customer'}</strong>
-            <span>{order.id}</span>
-            <span>{Math.max(1, Number(order.qty || order.quantity || order.totalQty || 1))} leaf order(s)</span>
-          </div>
-        ))}
-      </div>
-    </section>
-  );
-}
-
 function FarmerEarnings() {
   const { user } = useAuth();
   const { data } = useApi(() => endpoints.farmerEarnings(user?.id), { totalExtraIncomeEarned: 0 }, [user?.id]);
@@ -635,7 +570,6 @@ export default function FarmerPortal() {
         <Route path="/farmer/home" component={FarmerHome} />
         <Route path="/farmer/my-shop" component={FarmerMyShop} />
         <Route path="/farmer/products" component={FarmerProducts} />
-        <Route path="/farmer/plants" component={FarmerPlants} />
         <Route path="/farmer/orders" component={FarmerOrders} />
         <Route path="/farmer/earnings" component={FarmerEarnings} />
         <Route path="/farmer/payouts" component={FarmerEarnings} />

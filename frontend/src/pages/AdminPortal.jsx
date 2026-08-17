@@ -1,6 +1,6 @@
 import { Redirect, Route, Switch } from 'react-router-dom';
 import { useEffect, useState } from 'react';
-import { BarChart3, ClipboardCheck, FileClock, Home, Landmark, LayoutDashboard, ReceiptIndianRupee, Search, Settings, Store, Tags, UserCog, Users, X } from 'lucide-react';
+import { BarChart3, ClipboardCheck, FileClock, Home, Landmark, LayoutDashboard, Plus, ReceiptIndianRupee, Search, Settings, Store, Tags, UserCog, Users, X } from 'lucide-react';
 import AdminLayout from '../layouts/AdminLayout.jsx';
 import DataTable from '../components/DataTable.jsx';
 import FormField from '../components/FormField.jsx';
@@ -20,6 +20,8 @@ const nav = [
   { label: 'Users', href: '/admin/users', icon: Users },
   { label: 'Categories', href: '/admin/categories', icon: Tags },
   { label: 'Shops/POS', href: '/admin/shops', icon: Store },
+  { label: 'Location', href: '/admin/locations', icon: Plus },
+  { label: 'Plants', href: '/admin/plants', icon: BarChart3 },
   { label: 'Finance', href: '/admin/finance', icon: Landmark },
   { label: 'CMS', href: '/admin/cms', icon: LayoutDashboard },
   { label: 'Disputes', href: '/admin/disputes', icon: UserCog },
@@ -172,6 +174,66 @@ function AdminSettings() {
 function AdminHome() {
   const { data } = useApi(() => endpoints.adminAnalytics(), { totalSales: 160, activeFarmers: 3, pendingKyc: 0 }, []);
   return <><div className="dashboard-grid stats"><StatCard label="Total sales" value={money(data.totalSales || data.revenue || 160)} icon={BarChart3} tone="dark" /><StatCard label="Active farmers" value={data.activeFarmers || 3} icon={Store} tone="dark" /><StatCard label="Pending KYC" value={data.pendingKyc || 0} icon={ClipboardCheck} tone="dark" /></div><section className="panel"><h2>Admin operations</h2>{['KYC review', 'Commission slabs', 'Shop and POS setup', 'Finance and payouts', 'CMS banners', 'Disputes and audit'].map((item, index) => <div className="step-line" key={item}><span>{index + 1}</span>{item}</div>)}</section></>;
+}
+
+function AdminPlants() {
+  const { data } = useApi(() => endpoints.adminAnalytics(), {
+    activeCustomersCount: 0,
+    activeB2bCount: 0,
+    activeFarmersCount: 0,
+    totalOrdersCount: 0,
+  }, []);
+  const metrics = [
+    { label: 'Customers', value: data.activeCustomersCount || 0, hint: 'Active customer accounts', tone: 'one' },
+    { label: 'B2B Buyers', value: data.activeB2bCount || 0, hint: 'Wholesale buyers in the portal', tone: 'two' },
+    { label: 'Farmers', value: data.activeFarmersCount || 0, hint: 'Verified active farmers', tone: 'three' },
+    { label: 'Orders', value: data.totalOrdersCount || 0, hint: 'Total order activity', tone: 'four' },
+  ];
+  const plantCount = (value) => Math.max(1, Math.min(12, Number(value) || 0));
+
+  return (
+    <section className="panel plants-admin-panel">
+      <div className="panel-head-row">
+        <div>
+          <h2>Plants overview</h2>
+          <p className="muted" style={{ marginTop: 6 }}>
+            A visual admin snapshot of the platform. Each plant shows one live count from the database.
+          </p>
+        </div>
+        <span className="status-pill active">Admin only</span>
+      </div>
+      <div className="plants-admin-grid">
+        {metrics.map((item) => (
+          <article className={`admin-plant-card ${item.tone}`} key={item.label}>
+            <div className="admin-plant-orb" aria-hidden="true" />
+            <div className="admin-plant-top">
+              <span>{item.label}</span>
+            </div>
+            <div className="admin-plant-cluster" aria-label={`${item.label} count ${item.value}`}>
+              {Array.from({ length: plantCount(item.value) }).map((_, index) => (
+                <img
+                  key={`${item.label}-${index}`}
+                  src="/plant.png"
+                  alt=""
+                  aria-hidden="true"
+                  className="admin-plant-icon"
+                  style={{
+                    width: '18px',
+                    height: '18px',
+                    maxWidth: '18px',
+                    maxHeight: '18px',
+                    transform: 'none',
+                  }}
+                />
+              ))}
+            </div>
+            <strong className="admin-plant-number">{item.value}</strong>
+            <p>{item.hint}</p>
+          </article>
+        ))}
+      </div>
+    </section>
+  );
 }
 
 function statusPill(status) {
@@ -972,6 +1034,219 @@ function ShopManager() {
   );
 }
 
+function LocationManager() {
+  const { data, setData } = useApi(() => endpoints.adminServiceLocations(), [], []);
+  const [editing, setEditing] = useState(null);
+  const [creating, setCreating] = useState(null);
+  const refresh = async () => setData(unwrap(await endpoints.adminServiceLocations()));
+  const rows = Array.isArray(data) ? data : [];
+
+  const save = async (payload) => {
+    if (payload.id) await endpoints.updateServiceLocation(payload.id, payload);
+    else await endpoints.createServiceLocation(payload);
+    await refresh();
+    setCreating(null);
+    setEditing(null);
+  };
+
+  const remove = async (row) => {
+    await endpoints.deleteServiceLocation(row.id);
+    await refresh();
+  };
+
+  const groupedLocations = rows.reduce((acc, row) => {
+    const stateKey = String(row.state || '').trim() || 'Unknown';
+    const districtKey = String(row.district || '').trim();
+    if (!acc[stateKey]) acc[stateKey] = { stateRows: [], districts: {} };
+    if (!districtKey) {
+      acc[stateKey].stateRows.push(row);
+      return acc;
+    }
+    if (!acc[stateKey].districts[districtKey]) acc[stateKey].districts[districtKey] = [];
+    acc[stateKey].districts[districtKey].push(row);
+    return acc;
+  }, {});
+
+  const fields = [
+    { name: 'state', label: 'State', placeholder: 'Andhra Pradesh' },
+    { name: 'district', label: 'District', placeholder: 'Guntur' },
+    { name: 'city', label: 'City / Area', placeholder: 'Narasaraopet' },
+    { name: 'pincode', label: 'Pincode', placeholder: '522601' },
+    { name: 'status', label: 'Status', type: 'select', options: ['active', 'paused'] },
+  ];
+
+  const beginEdit = (row) => setEditing({ ...row });
+
+  return (
+    <>
+      <section className="panel">
+        <div className="panel-head-row">
+          <h2>Location master</h2>
+          <button className="btn btn-primary" type="button" onClick={() => setCreating({ kind: 'state', status: 'active' })}>
+            <Plus size={16} /> Add state
+          </button>
+        </div>
+        <p className="muted">Create a state first, then add districts under that state, then cities under each district. Farmer onboarding reads from this hierarchy.</p>
+        <div className="panel" style={{ marginTop: 16 }}>
+          <h3 style={{ marginBottom: 10 }}>State hierarchy</h3>
+          {Object.entries(groupedLocations).map(([state, payload]) => {
+            const districtEntries = Object.entries(payload.districts || {});
+            const districtCount = districtEntries.length;
+            const cityCount = districtEntries.reduce((sum, [, cityRows]) => sum + cityRows.length, 0);
+            return (
+              <div key={state} style={{ marginBottom: 14, padding: 12, border: '1px solid var(--border)', borderRadius: 12, background: 'var(--surface)' }}>
+                <div className="panel-head-row" style={{ marginBottom: 8 }}>
+                  <div>
+                    <strong>{state}</strong>
+                    <div className="muted" style={{ fontSize: 12, marginTop: 4 }}>
+                      {districtCount} district{districtCount === 1 ? '' : 's'} · {cityCount} city/area{cityCount === 1 ? '' : 'ies'}
+                    </div>
+                  </div>
+                  <div className="action-row">
+                    <button className="btn btn-light" type="button" onClick={() => setCreating({ kind: 'district', state, status: 'active' })}>
+                      <Plus size={14} /> Add district
+                    </button>
+                  </div>
+                </div>
+                <div style={{ display: 'grid', gap: 10 }}>
+                  {(payload.stateRows || []).length > 0 ? (
+                    <div style={{ padding: 12, borderRadius: 10, background: 'rgba(15, 23, 42, 0.03)' }}>
+                      <div className="panel-head-row" style={{ marginBottom: 8 }}>
+                        <strong>State only</strong>
+                        <div className="action-row">
+                          {(payload.stateRows || []).map((row) => (
+                            <div key={row.id} className="action-row">
+                              <button className="btn btn-light" type="button" onClick={() => beginEdit(row)}>Edit</button>
+                              <button className="btn btn-light" type="button" onClick={() => remove(row)}>Delete</button>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        {(payload.stateRows || []).map((row) => (
+                          <span key={row.id} className="status-pill active" style={{ textTransform: 'none' }}>
+                            State saved without district/city
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
+                  {districtEntries.map(([district, cityRows]) => (
+                    <div key={district} style={{ padding: 12, borderRadius: 10, background: 'rgba(15, 23, 42, 0.03)' }}>
+                      <div className="panel-head-row" style={{ marginBottom: 8 }}>
+                        <strong>{district}</strong>
+                        <div className="action-row">
+                          <button className="btn btn-light" type="button" onClick={() => beginEdit(cityRows[0])}>Edit</button>
+                          <button className="btn btn-light" type="button" onClick={() => remove(cityRows[0])}>Delete</button>
+                          <button className="btn btn-light" type="button" onClick={() => setCreating({ kind: 'city', state, district, status: 'active' })}>
+                            <Plus size={14} /> Add city
+                          </button>
+                        </div>
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        {cityRows.filter((row) => String(row.city || '').trim()).map((row) => (
+                          <div key={row.id} className="status-pill active" style={{ textTransform: 'none', display: 'flex', alignItems: 'center', gap: 10 }}>
+                            <span>{row.city || '-'} / {row.pincode || '-'}</span>
+                            <button className="btn btn-light" type="button" onClick={() => beginEdit(row)} style={{ padding: '4px 10px' }}>Edit</button>
+                            <button className="btn btn-light" type="button" onClick={() => remove(row)} style={{ padding: '4px 10px' }}>Delete</button>
+                          </div>
+                        ))}
+                        {!cityRows.some((row) => String(row.city || '').trim()) ? (
+                          <span className="status-pill" style={{ textTransform: 'none' }}>No cities added yet</span>
+                        ) : null}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </section>
+      {(creating || editing) ? (
+        <section className="modal-backdrop" role="presentation" onClick={() => { setCreating(null); setEditing(null); }}>
+          <div className="modal" role="dialog" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-head">
+              <h2>{editing ? 'Edit location' : creating?.kind === 'state' ? 'Add state' : creating?.kind === 'district' ? 'Add district' : 'Add city'}</h2>
+              <button className="icon-only" type="button" onClick={() => { setCreating(null); setEditing(null); }}><X size={18} /></button>
+            </div>
+            {editing ? (
+              <div style={{ marginBottom: 12, padding: 12, borderRadius: 12, background: 'rgba(59,130,246,0.08)' }}>
+                <strong>State group</strong>
+                <p className="muted" style={{ marginTop: 6 }}>
+                  This state can contain multiple districts, cities, areas, and pincodes. You can edit this entry or create another row for the same state.
+                </p>
+                <div className="flex flex-wrap gap-2" style={{ marginTop: 8 }}>
+                  {rows.filter((row) => row.state === editing.state).map((row) => (
+                    <span key={row.id} className="status-pill active" style={{ textTransform: 'none' }}>
+                      {row.district || '-'} / {row.city || '-'} / {row.pincode || '-'}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+            <form
+              className="form-grid single"
+              onSubmit={async (e) => {
+                e.preventDefault();
+                await save(editing || creating);
+              }}
+            >
+              {creating?.kind ? (
+                <div className="notice" style={{ marginBottom: 12 }}>
+                  {creating.kind === 'state'
+                    ? 'Create a brand new state.'
+                    : creating.kind === 'district'
+                      ? `State is already selected as ${creating.state}. Enter the district name.`
+                      : `State and district are already selected. Enter the city / area and pincode.`}
+                </div>
+              ) : null}
+              {creating?.kind === 'state' ? (
+                <div className="notice" style={{ marginBottom: 12 }}>
+                  This will create only a state row. District, city, and pincode will stay empty until you add them separately.
+                </div>
+              ) : null}
+              {fields
+                .filter((field) => {
+                  if (creating?.kind === 'state') return field.name === 'state' || field.name === 'status';
+                  if (creating?.kind === 'district') return field.name === 'state' || field.name === 'district' || field.name === 'status';
+                  if (creating?.kind === 'city') return field.name === 'state' || field.name === 'district' || field.name === 'city' || field.name === 'pincode' || field.name === 'status';
+                  return true;
+                })
+                .map((field) => (
+                  <FormField
+                    key={field.name}
+                    {...field}
+                    value={
+                      editing
+                        ? (editing[field.name] || '')
+                        : creating?.kind === 'state' && field.name !== 'state' && field.name !== 'status'
+                          ? ''
+                          : (creating?.[field.name] || '')
+                    }
+                    onChange={(e) => {
+                      if (editing) setEditing({ ...editing, [field.name]: e.target.value });
+                      else if (creating) setCreating({ ...creating, [field.name]: e.target.value });
+                    }}
+                    disabled={
+                      creating?.kind === 'district' && field.name === 'state'
+                        ? true
+                        : (creating?.kind === 'city' && (field.name === 'state' || field.name === 'district'))
+                    }
+                  />
+                ))}
+              <div className="modal-actions">
+                <button className="btn btn-primary" type="submit">Save</button>
+                <button className="btn btn-light" type="button" onClick={() => { setCreating(null); setEditing(null); }}>Cancel</button>
+              </div>
+            </form>
+          </div>
+        </section>
+      ) : null}
+    </>
+  );
+}
+
 function FinanceManager() {
   const { data: transactions, setData: setTransactions } = useApi(() => endpoints.finance(), [], []);
   const { data: summary, setData: setSummary } = useApi(() => endpoints.financeSummary(), { platformCommissionRevenue: 0, totalGmvAmount: 0, totalOrdersCount: 0 }, []);
@@ -1230,6 +1505,7 @@ export default function AdminPortal() {
         )} />
         <Route path="/admin/shops" component={ShopManager} />
         <Route path="/admin/finance" component={FinanceManager} />
+        <Route path="/admin/plants" component={AdminPlants} />
         <Route path="/admin/cms" render={() => (
           <ManageList
             title="CMS banners"
@@ -1322,6 +1598,7 @@ export default function AdminPortal() {
           />
         )} />
         <Route path="/admin/audit" render={() => <AdminTable title="Audit logs and permissions" loader={() => endpoints.audit()} fallback={[]} columns={[{ key: 'id', label: 'ID' }, { key: 'action', label: 'Action' }, { key: 'entity', label: 'Entity' }, { key: 'at', label: 'Time' }]} />} />
+        <Route path="/admin/locations" component={LocationManager} />
         <Route path="/admin/settings" render={() => <AdminSettings />} />
         <Route render={() => <StateBlock title="Admin screen not found" />} />
       </Switch>

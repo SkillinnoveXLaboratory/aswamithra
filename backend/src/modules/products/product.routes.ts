@@ -18,6 +18,24 @@ import {
 
 const router = Router();
 
+function toRadians(value: number) {
+  return (value * Math.PI) / 180;
+}
+
+function calculateDistanceKm(fromLat: number, fromLng: number, toLat: number, toLng: number) {
+  const earthRadiusKm = 6371;
+  const latDiff = toRadians(toLat - fromLat);
+  const lngDiff = toRadians(toLng - fromLng);
+  const startLat = toRadians(fromLat);
+  const endLat = toRadians(toLat);
+
+  const a = Math.sin(latDiff / 2) ** 2
+    + Math.cos(startLat) * Math.cos(endLat) * Math.sin(lngDiff / 2) ** 2;
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+
+  return Number((earthRadiusKm * c).toFixed(2));
+}
+
 function productToInsertInput(product: Product, status?: string) {
   return {
     id: product.id,
@@ -129,7 +147,7 @@ router.get('/products/radius', async (req: Request, res: Response) => {
     .filter((p) => (!category || category === 'all' ? true : p.category === category))
     .filter((p) => (!search ? true : p.name.toLowerCase().includes((search as string).toLowerCase())))
     .map((p) => {
-      const distanceKm = Math.hypot(userLat! - p.location.lat, userLng! - p.location.lng);
+      const distanceKm = calculateDistanceKm(userLat!, userLng!, p.location.lat, p.location.lng);
       return {
         id: p.id,
         name: p.name,
@@ -222,7 +240,7 @@ router.get('/products/:id', async (req: Request, res: Response) => {
     }
   }
 
-  const distanceKm = Math.hypot((userLat ?? 0) - product.location.lat, (userLng ?? 0) - product.location.lng);
+  const distanceKm = calculateDistanceKm(userLat ?? 0, userLng ?? 0, product.location.lat, product.location.lng);
 
   return sendSuccess(res, 200, 'Product detail retrieved', {
     ...product,

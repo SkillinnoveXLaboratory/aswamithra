@@ -42,16 +42,50 @@ const nav = [
   { group: 'Account', label: 'Support', href: '/customer/disputes', icon: LifeBuoy, hint: 'Raise disputes and get help' },
 ];
 
-function useCustomerProducts(query = {}) {
+function parseCustomerCoordinates(address) {
+  const lat = Number(address?.location?.lat ?? address?.lat);
+  const lng = Number(address?.location?.lng ?? address?.lng);
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+  if (lat === 0 && lng === 0) return null;
+  return { lat, lng };
+}
+
+function useCustomerLocation() {
+  const { data: addresses, loading } = useApi(() => endpoints.addresses(), [], []);
+  const defaultAddress = (addresses || []).find((address) => address.isDefault) || addresses?.[0] || null;
+  const coordinates = parseCustomerCoordinates(defaultAddress);
+
+  return {
+    addresses,
+    defaultAddress,
+    coordinates,
+    loading,
+    hasLocation: Boolean(coordinates),
+  };
+}
+
+function useCustomerProducts(query = {}, coordinates) {
   return useApi(
-    () => endpoints.productsRadius({ lat: 16.5062, lng: 80.648, radiusKm: query.radius || 50, category: query.category || 'all', search: query.search || '' }),
-    { products: [], total: 0 },
-    [query.radius, query.category, query.search],
+    () => {
+      if (!coordinates) {
+        return Promise.resolve({ data: { data: { products: [], total: 0, locationMissing: true } } });
+      }
+      return endpoints.productsRadius({
+        lat: coordinates.lat,
+        lng: coordinates.lng,
+        radiusKm: query.radius || 50,
+        category: query.category || 'all',
+        search: query.search || '',
+      });
+    },
+    { products: [], total: 0, locationMissing: !coordinates },
+    [coordinates?.lat, coordinates?.lng, query.radius, query.category, query.search],
   );
 }
 
 function CustomerHome() {
-  const { data: productData } = useCustomerProducts({ radius: 50 });
+  const { defaultAddress, coordinates, loading: locationLoading, hasLocation } = useCustomerLocation();
+  const { data: productData, loading: productsLoading } = useCustomerProducts({ radius: 50 }, coordinates);
   const { data: savings } = useApi(() => endpoints.savings(), { totalSavings: 0, entries: [] }, []);
   const { data: orders } = useApi(() => endpoints.orders(), [], []);
   return (
@@ -64,6 +98,15 @@ function CustomerHome() {
       <div className="content-split">
         <section className="panel">
           <h2>Fresh near you</h2>
+          {locationLoading || productsLoading ? <StateBlock type="loading" title="Finding products near your saved location" /> : null}
+          {!locationLoading && !hasLocation ? (
+            <StateBlock
+              title="Add your delivery location"
+              message="Nearby products are now filtered from your saved customer latitude and longitude. Add or update your default address in Profile."
+              action={<Link className="btn btn-primary" to="/customer/profile">Open profile</Link>}
+            />
+          ) : null}
+          {hasLocation && defaultAddress ? <p className="muted">Showing products within 50 km of {defaultAddress.city || defaultAddress.street || 'your saved address'}.</p> : null}
           <div className="products-grid compact-products">
             {(productData.products || []).slice(0, 4).map((product) => <ProductCard key={product.id} product={product} />)}
           </div>
@@ -81,7 +124,8 @@ function CustomerHome() {
 
 function BrowseProducts() {
   const [filters, setFilters] = useState({ search: '', category: 'all', radius: 50 });
-  const { data, loading } = useCustomerProducts(filters);
+  const { defaultAddress, coordinates, loading: locationLoading, hasLocation } = useCustomerLocation();
+  const { data, loading } = useCustomerProducts(filters, coordinates);
   const history = useHistory();
   const addToCart = async (product) => {
     await endpoints.addCartItem(buildCartPayload(product));
@@ -105,7 +149,15 @@ function BrowseProducts() {
           <option value="50">50 km</option>
         </select>
       </div>
-      {loading ? <StateBlock type="loading" title="Finding farmers near you" /> : null}
+      {hasLocation && defaultAddress ? <p className="muted">Using saved location: {defaultAddress.street || defaultAddress.city}, {defaultAddress.city || defaultAddress.district || defaultAddress.state}</p> : null}
+      {locationLoading || loading ? <StateBlock type="loading" title="Finding farmers near you" /> : null}
+      {!locationLoading && !hasLocation ? (
+        <StateBlock
+          title="Location needed for nearby filtering"
+          message="Set a customer address with latitude and longitude in your profile to browse products by radius."
+          action={<Link className="btn btn-primary" to="/customer/profile">Update profile</Link>}
+        />
+      ) : null}
       <div className="products-grid">
         {(data.products || []).map((product) => <ProductCard key={product.id} product={product} onAdd={addToCart} />)}
       </div>
@@ -279,9 +331,63 @@ function SavingsPage() {
 }
 
 function ProfilePage() {
-  const { user } = useAuth();
+  const { user, setUser } = useAuth();
   const { data: addresses } = useApi(() => endpoints.addresses(), [], []);
-  return <section className="panel"><h2>Profile and addresses</h2><div className="profile-card"><strong>{user?.name}</strong><span>{user?.mobile}</span><span className="pill good">{user?.role}</span></div><DataTable rows={addresses || []} columns={[{ key: 'name', label: 'Name' }, { key: 'street', label: 'Address' }, { key: 'city', label: 'City' }, { key: 'pincode', label: 'Pincode' }]} empty="No saved addresses yet" /></section>;
+  const [form, setForm] = useState({
+    name: user?.name || '',
+    email: user?.email || '',
+    mobile: user?.mobile || '',
+  });
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState('');
+  const [error, setError] = useState('');
+
+  const saveProfile = async (event) => {
+    event.preventDefault();
+    setSaving(true);
+    setMessage('');
+    setError('');
+    try {
+      const updated = unwrap(await endpoints.updateMe({
+        name: form.name.trim(),
+        email: form.email.trim(),
+        mobile: form.mobile.trim(),
+      }));
+      setUser({ ...user, ...updated });
+      setMessage('Profile updated successfully.');
+    } catch (err) {
+      setError(err?.response?.data?.error?.message || 'Unable to update profile.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <section className="panel">
+      <h2>Profile and addresses</h2>
+      <div className="content-split">
+        <div className="panel profile-panel-card">
+          <div className="profile-card">
+            <strong>{user?.name}</strong>
+            <span>{user?.mobile}</span>
+            {user?.email ? <span>{user.email}</span> : null}
+            <span className="pill good">{user?.role}</span>
+          </div>
+          <form className="form-grid single" onSubmit={saveProfile}>
+            <FormField label="Full name" name="name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required />
+            <FormField label="Email" name="email" type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
+            <FormField label="Phone" name="mobile" value={form.mobile} onChange={(e) => setForm({ ...form, mobile: e.target.value })} required />
+            {message ? <div className="notice success">{message}</div> : null}
+            {error ? <div className="notice">{error}</div> : null}
+            <button className="btn btn-primary form-submit" type="submit" disabled={saving}>{saving ? 'Saving...' : 'Save profile'}</button>
+          </form>
+        </div>
+        <div className="panel">
+          <DataTable rows={addresses || []} columns={[{ key: 'name', label: 'Name' }, { key: 'street', label: 'Address' }, { key: 'city', label: 'City' }, { key: 'pincode', label: 'Pincode' }]} empty="No saved addresses yet" />
+        </div>
+      </div>
+    </section>
+  );
 }
 
 function DisputePage() {

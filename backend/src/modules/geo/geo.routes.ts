@@ -30,9 +30,10 @@ const getAdminLocations = async (_req: Request, res: Response) => {
 const postAdminLocation = async (req: Request, res: Response) => {
   const newLoc = {
     id: 'loc_' + Date.now(),
-    state: req.body.state || 'Andhra Pradesh',
-    district: req.body.district || 'Guntur',
-    city: req.body.city || 'Guntur',
+    state: req.body.state || null,
+    district: req.body.district || null,
+    city: req.body.city || null,
+    pincode: req.body.pincode || null,
     status: req.body.status || 'active',
     lat: req.body.lat ?? null,
     lng: req.body.lng ?? null,
@@ -40,8 +41,8 @@ const postAdminLocation = async (req: Request, res: Response) => {
     activeHubs: req.body.activeHubs ?? null,
   };
   await query(
-    'INSERT INTO service_locations (id, state, district, city, status, lat, lng, active_farmers, active_hubs) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)',
-    [newLoc.id, newLoc.state, newLoc.district, newLoc.city, newLoc.status, newLoc.lat, newLoc.lng, newLoc.activeFarmers, newLoc.activeHubs],
+    'INSERT INTO service_locations (id, state, district, city, pincode, status, lat, lng, active_farmers, active_hubs) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)',
+    [newLoc.id, newLoc.state, newLoc.district, newLoc.city, newLoc.pincode, newLoc.status, newLoc.lat, newLoc.lng, newLoc.activeFarmers, newLoc.activeHubs],
   );
   sendSuccess(res, 201, 'Service location created', newLoc);
 };
@@ -55,11 +56,12 @@ router.put('/admin/geo/service-locations/:id', async (req: Request, res: Respons
   const result = await query('SELECT * FROM service_locations WHERE id = $1 LIMIT 1', [req.params.id]);
   if (!result.rows[0]) return sendError(res, 404, 'LOCATION_NOT_FOUND', 'Service location not found');
   await query(
-    'UPDATE service_locations SET state = $1, district = $2, city = $3, status = $4, lat = $5, lng = $6, active_farmers = $7, active_hubs = $8 WHERE id = $9',
+    'UPDATE service_locations SET state = $1, district = $2, city = $3, pincode = $4, status = $5, lat = $6, lng = $7, active_farmers = $8, active_hubs = $9 WHERE id = $10',
     [
       req.body.state ?? result.rows[0].state,
       req.body.district ?? result.rows[0].district,
       req.body.city ?? result.rows[0].city,
+      req.body.pincode ?? result.rows[0].pincode,
       req.body.status ?? result.rows[0].status,
       req.body.lat ?? result.rows[0].lat,
       req.body.lng ?? result.rows[0].lng,
@@ -75,11 +77,12 @@ router.put('/admin/service-locations/:id', async (req: Request, res: Response) =
   const result = await query('SELECT * FROM service_locations WHERE id = $1 LIMIT 1', [req.params.id]);
   if (!result.rows[0]) return sendError(res, 404, 'LOCATION_NOT_FOUND', 'Service location not found');
   await query(
-    'UPDATE service_locations SET state = $1, district = $2, city = $3, status = $4, lat = $5, lng = $6, active_farmers = $7, active_hubs = $8 WHERE id = $9',
+    'UPDATE service_locations SET state = $1, district = $2, city = $3, pincode = $4, status = $5, lat = $6, lng = $7, active_farmers = $8, active_hubs = $9 WHERE id = $10',
     [
       req.body.state ?? result.rows[0].state,
       req.body.district ?? result.rows[0].district,
       req.body.city ?? result.rows[0].city,
+      req.body.pincode ?? result.rows[0].pincode,
       req.body.status ?? result.rows[0].status,
       req.body.lat ?? result.rows[0].lat,
       req.body.lng ?? result.rows[0].lng,

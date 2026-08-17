@@ -4,20 +4,20 @@ import { CheckCircle2, MapPin, Search } from 'lucide-react';
 import FormField from '../components/FormField.jsx';
 import ImageUploadField from '../components/ImageUploadField.jsx';
 import StateBlock from '../components/StateBlock.jsx';
+import { useApi } from '../hooks/useApi.js';
 import { useAuth } from '../context/AuthContext.jsx';
 import { endpoints, unwrap } from '../services/api.js';
 import { roleHome } from '../utils/format.js';
 
 const forms = {
   customer: [
-    ['name', 'Full name', 'text'], ['address', 'Address', 'textarea'], ['landmark', 'Landmark', 'text'], ['pincode', 'Pincode', 'text'],
+    ['name', 'Full name', 'text'], ['email', 'Email', 'email'], ['address', 'Address', 'textarea'], ['landmark', 'Landmark', 'text'], ['pincode', 'Pincode', 'text'],
     ['city', 'City', 'text'], ['state', 'State', 'text'], ['lat', 'Latitude', 'number'], ['lng', 'Longitude', 'number'], ['language', 'Preferred language', 'select'],
   ],
   farmer: [
     ['name', 'Full name', 'text'], ['mobile', 'Phone number', 'tel'], ['village', 'Village', 'text'], ['mandal', 'Mandal', 'text'],
-    ['district', 'District', 'text'], ['state', 'State', 'text'], ['pincode', 'Pincode', 'text'], ['lat', 'Farm latitude', 'number'],
-    ['lng', 'Farm longitude', 'number'], ['aadhaarNumber', 'Aadhaar number', 'text'], ['aadhaarDocumentUrl', 'Aadhaar document', 'upload'],
-    ['gstin', 'GSTIN (optional)', 'text'], ['bankAccountName', 'Bank account name', 'text'], ['bankAccountNumber', 'Bank account number', 'text'],
+    ['district', 'District', 'text'], ['state', 'State', 'text'], ['pincode', 'Pincode', 'text'], ['aadhaarDocumentUrl', 'Aadhaar document', 'upload'],
+    ['bankAccountName', 'Bank account name', 'text'], ['bankAccountNumber', 'Bank account number', 'text'],
     ['ifscCode', 'IFSC code', 'text'], ['cropsGrown', 'Crops grown', 'text'], ['landSizeAcres', 'Land size in acres', 'number'],
   ],
   b2b: [
@@ -37,9 +37,22 @@ const defaults = {
 };
 
 const farmerRequired = [
-  'name', 'village', 'mandal', 'district', 'state', 'pincode', 'lat', 'lng',
-  'aadhaarNumber', 'bankAccountName', 'bankAccountNumber', 'ifscCode', 'cropsGrown', 'landSizeAcres',
+  'name', 'village', 'mandal', 'district', 'state', 'pincode',
+  'bankAccountName', 'bankAccountNumber', 'ifscCode', 'cropsGrown', 'landSizeAcres',
 ];
+
+function uniqueOptions(rows, key) {
+  return Array.from(new Set((rows || []).map((row) => String(row?.[key] || '').trim()).filter(Boolean))).sort();
+}
+
+function matchLocations(rows, filters) {
+  return (rows || []).filter((row) => {
+    if (filters.state && row.state !== filters.state) return false;
+    if (filters.district && row.district !== filters.district) return false;
+    if (filters.city && row.city !== filters.city) return false;
+    return true;
+  });
+}
 
 function cleanValue(value) {
   if (value === null || value === undefined) return '';
@@ -57,6 +70,72 @@ function firstDoc(kyc, detailsKey) {
 
 function addressString(parts) {
   return parts.filter(Boolean).join(', ');
+}
+
+function locationLabel(row) {
+  return [row?.city, row?.district, row?.state, row?.pincode].filter(Boolean).join(' - ');
+}
+
+function locationKey(row) {
+  return [row?.state, row?.district, row?.city, row?.pincode].map((part) => String(part || '').trim()).join('||');
+}
+
+function nonEmptyRow(row) {
+  return Boolean(String(row?.state || '').trim());
+}
+
+function norm(value) {
+  return String(value || '').trim().toLowerCase();
+}
+
+function compact(value) {
+  return norm(value).replace(/[^a-z0-9]/g, '');
+}
+
+function editDistance(a, b) {
+  const left = compact(a);
+  const right = compact(b);
+  if (!left) return right.length;
+  if (!right) return left.length;
+  const dp = Array.from({ length: left.length + 1 }, () => Array(right.length + 1).fill(0));
+  for (let i = 0; i <= left.length; i += 1) dp[i][0] = i;
+  for (let j = 0; j <= right.length; j += 1) dp[0][j] = j;
+  for (let i = 1; i <= left.length; i += 1) {
+    for (let j = 1; j <= right.length; j += 1) {
+      const cost = left[i - 1] === right[j - 1] ? 0 : 1;
+      dp[i][j] = Math.min(
+        dp[i - 1][j] + 1,
+        dp[i][j - 1] + 1,
+        dp[i - 1][j - 1] + cost,
+      );
+    }
+  }
+  return dp[left.length][right.length];
+}
+
+function findBestLocationMatch(rows, query) {
+  const needle = compact(query);
+  if (!needle) return null;
+  let best = null;
+  let bestScore = Number.POSITIVE_INFINITY;
+
+  for (const row of rows || []) {
+    const parts = [row.state, row.district, row.city, row.pincode].filter(Boolean);
+    for (const part of parts) {
+      const hay = compact(part);
+      if (!hay) continue;
+      if (hay.includes(needle) || needle.includes(hay)) {
+        return row;
+      }
+      const distance = editDistance(needle, hay);
+      if (distance < bestScore) {
+        bestScore = distance;
+        best = row;
+      }
+    }
+  }
+
+  return bestScore <= 2 ? best : null;
 }
 
 function mapKycToForm(kyc, role, user) {
@@ -96,7 +175,7 @@ function mapKycToForm(kyc, role, user) {
       mobile: cleanValue(kyc?.mobile) || cleanValue(d.mobile) || cleanValue(user?.mobile),
     };
   }
-  return { ...defaults, name: cleanValue(user?.name), mobile: cleanValue(user?.mobile) };
+  return { ...defaults, name: cleanValue(user?.name), email: cleanValue(kyc?.email) || cleanValue(d.email) || cleanValue(user?.email), mobile: cleanValue(user?.mobile) };
 }
 
 export default function OnboardingPage() {
@@ -112,6 +191,7 @@ export default function OnboardingPage() {
   const [searchError, setSearchError] = useState('');
   const [searchingLocation, setSearchingLocation] = useState(false);
   const [locationQuery, setLocationQuery] = useState('');
+  const { data: locationsData } = useApi(() => endpoints.serviceLocations(), [], []);
 
   useEffect(() => {
     let active = true;
@@ -126,7 +206,7 @@ export default function OnboardingPage() {
 
       if (role === 'customer') {
         if (active) {
-          setForm({ ...defaults, name: user?.name || '', mobile: user?.mobile || '' });
+          setForm({ ...defaults, name: user?.name || '', email: user?.email || '', mobile: user?.mobile || '' });
           setLocationQuery('');
           setLoadingExisting(false);
         }
@@ -135,7 +215,7 @@ export default function OnboardingPage() {
 
       if (!token || !user?.id) {
         if (active) {
-          setForm({ ...defaults, name: user?.name || '', mobile: user?.mobile || '' });
+          setForm({ ...defaults, name: user?.name || '', email: user?.email || '', mobile: user?.mobile || '' });
           setLoadingExisting(false);
         }
         return;
@@ -161,6 +241,7 @@ export default function OnboardingPage() {
         setForm({
           ...defaults,
           name: user?.name || '',
+          email: user?.email || '',
           mobile: user?.mobile || '',
         });
         setError(err?.response?.data?.error?.message || 'Could not load existing KYC. You can still fill and submit.');
@@ -195,11 +276,40 @@ export default function OnboardingPage() {
     setSearchError('');
     setSearchingLocation(true);
     try {
-      const encoded = encodeURIComponent(target);
-      const response = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encoded}`, {
-        headers: { 'User-Agent': 'Aswamithra-App' },
-      });
-      const results = await response.json();
+      const tryGeocode = async (value) => {
+        const encoded = encodeURIComponent(value);
+        const response = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encoded}&countrycodes=in&limit=5`, {
+          headers: { 'User-Agent': 'Aswamithra-App' },
+        });
+        return response.json();
+      };
+
+      let results = await tryGeocode(target);
+      if (!results || results.length === 0) {
+        results = await tryGeocode(`${target}, India`);
+      }
+      if (!results || results.length === 0) {
+        const localMatch = findBestLocationMatch(locations, target);
+        if (localMatch) {
+          const adminQuery = [localMatch.city, localMatch.district, localMatch.state, localMatch.pincode, 'India'].filter(Boolean).join(', ');
+          results = await tryGeocode(adminQuery);
+          if (!results || results.length === 0) {
+            setForm((current) => ({
+              ...current,
+              state: localMatch.state || current.state,
+              district: localMatch.district || current.district,
+              village: localMatch.city || current.village,
+              mandal: localMatch.district || current.mandal,
+              pincode: localMatch.pincode || current.pincode,
+              lat: localMatch.lat ?? current.lat,
+              lng: localMatch.lng ?? current.lng,
+              address: role !== 'farmer' ? [localMatch.city, localMatch.district, localMatch.state, localMatch.pincode].filter(Boolean).join(', ') : current.address,
+            }));
+            setLocationQuery([localMatch.city, localMatch.district, localMatch.state, localMatch.pincode].filter(Boolean).join(', '));
+            return;
+          }
+        }
+      }
       if (results && results.length > 0) {
         const first = results[0];
         setForm((current) => {
@@ -215,13 +325,52 @@ export default function OnboardingPage() {
         });
         setLocationQuery(first.display_name || target);
       } else {
-        setSearchError('No results found for the given address.');
+        setSearchError('No results found. Try a more specific address or nearby city name.');
       }
     } catch (err) {
       setSearchError('Geocoding failed. Please try again.');
     } finally {
       setSearchingLocation(false);
     }
+  };
+
+  const useCurrentLocation = () => {
+    if (!navigator.geolocation) {
+      setSearchError('Live location is not supported by this browser.');
+      return;
+    }
+    setSearchError('');
+    setSearchingLocation(true);
+    navigator.geolocation.getCurrentPosition(
+      async (position) => {
+        const lat = Number(position.coords.latitude).toFixed(6);
+        const lng = Number(position.coords.longitude).toFixed(6);
+        setForm((current) => ({ ...current, lat, lng }));
+        try {
+          const response = await fetch(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lng}`, {
+            headers: { 'User-Agent': 'Aswamithra-App' },
+          });
+          const result = await response.json();
+          const displayAddress = result?.display_name || `Lat ${lat}, Lng ${lng}`;
+          setForm((current) => ({
+            ...current,
+            lat,
+            lng,
+            address: role !== 'farmer' ? displayAddress : current.address,
+          }));
+          setLocationQuery(displayAddress);
+        } catch (_error) {
+          setLocationQuery(`Lat ${lat}, Lng ${lng}`);
+        } finally {
+          setSearchingLocation(false);
+        }
+      },
+      () => {
+        setSearchError('Unable to read your current location.');
+        setSearchingLocation(false);
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 300000 },
+    );
   };
 
 
@@ -290,6 +439,64 @@ export default function OnboardingPage() {
 
   const customerAddressQuery = addressString([form.address, form.landmark, form.city, form.state, form.pincode]);
   const farmerAddressQuery = addressString([form.village, form.mandal, form.district, form.state, form.pincode]);
+  const locations = Array.isArray(locationsData) ? locationsData.filter(nonEmptyRow) : [];
+  const farmerStateOptions = uniqueOptions(locations, 'state');
+  const farmerDistrictOptions = uniqueOptions(locations.filter((row) => norm(row.state) === norm(form.state) && String(row.district || '').trim()), 'district');
+  const farmerCityRows = locations.filter((row) => norm(row.state) === norm(form.state) && norm(row.district) === norm(form.district) && String(row.city || '').trim());
+  const farmerCityOptions = uniqueOptions(farmerCityRows, 'city');
+  const farmerPincodeOptions = uniqueOptions(farmerCityRows, 'pincode');
+
+  const setFarmerField = (name, value) => {
+    setForm((current) => {
+      const next = { ...current, [name]: value };
+      if (name === 'state') {
+        next.district = '';
+        next.mandal = '';
+        next.village = '';
+        next.pincode = '';
+      }
+      if (name === 'district') {
+        next.mandal = value;
+        next.village = '';
+        next.pincode = '';
+      }
+      if (name === 'village') {
+        next.pincode = '';
+      }
+      return next;
+    });
+  };
+
+  const syncFarmerLocation = (field, value) => {
+    setForm((current) => {
+      const next = { ...current, [field]: value };
+      const selected = locations.find((row) => norm(row.state) === norm(field === 'state' ? value : next.state)
+        && norm(row.district) === norm(field === 'district' ? value : next.district)
+        && norm(row.city) === norm(field === 'village' ? value : next.village));
+      if (selected) {
+        if (selected.pincode) next.pincode = selected.pincode;
+        if (selected.district) {
+          next.district = selected.district;
+          next.mandal = selected.district;
+        }
+        if (selected.city) next.village = selected.city;
+        if (selected.state) next.state = selected.state;
+      }
+      if (field === 'state') {
+        next.district = '';
+        next.mandal = '';
+        next.village = '';
+        next.pincode = '';
+      } else if (field === 'district') {
+        next.mandal = value;
+        next.village = '';
+        next.pincode = '';
+      } else if (field === 'village') {
+        next.pincode = '';
+      }
+      return next;
+    });
+  };
 
   const renderLocationSearch = (label, query, placeholder) => (
     <div className="w-full">
@@ -377,7 +584,51 @@ export default function OnboardingPage() {
               </>
             ) : role === 'farmer' ? (
               <>
-                {forms[role].slice(0, 8).map(([name, label, type]) => (
+                <label className="field">
+                  <span>State *</span>
+                  <select value={form.state || ''} onChange={(e) => syncFarmerLocation('state', e.target.value)} required>
+                    <option value="">Choose state</option>
+                    {farmerStateOptions.map((state) => (
+                      <option key={state} value={state}>{state}</option>
+                    ))}
+                  </select>
+                </label>
+                <p className="text-xs text-slate-500 -mt-2">
+                  This list comes from the locations added by admin.
+                </p>
+                <label className="field">
+                  <span>District *</span>
+                  <select value={form.district || ''} onChange={(e) => syncFarmerLocation('district', e.target.value)} required disabled={!form.state}>
+                    <option value="">{form.state ? 'Choose district' : 'Select state first'}</option>
+                    {farmerDistrictOptions.map((district) => (
+                      <option key={district} value={district}>{district}</option>
+                    ))}
+                  </select>
+                </label>
+                <label className="field">
+                  <span>City / Area *</span>
+                  <select value={form.village || ''} onChange={(e) => syncFarmerLocation('village', e.target.value)} required disabled={!form.district}>
+                    <option value="">{form.district ? 'Choose city / area' : 'Select district first'}</option>
+                    {farmerCityOptions.map((city) => (
+                      <option key={city} value={city}>{city}</option>
+                    ))}
+                  </select>
+                </label>
+                <label className="field">
+                  <span>Pincode *</span>
+                  <select value={form.pincode || ''} onChange={(e) => setFarmerField('pincode', e.target.value)} required disabled={!form.village}>
+                    <option value="">{form.village ? 'Choose pincode' : 'Select city first'}</option>
+                    {farmerPincodeOptions.map((pincode) => (
+                      <option key={pincode} value={pincode}>{pincode}</option>
+                    ))}
+                  </select>
+                </label>
+                {(form.state || form.district || form.village || form.pincode) ? (
+                  <div className="notice" style={{ marginTop: 2 }}>
+                    Selected location: {[form.state, form.district, form.village, form.pincode].filter(Boolean).join(' > ')}
+                  </div>
+                ) : null}
+                {forms[role].filter(([name]) => !['village', 'mandal', 'district', 'state', 'pincode', 'aadhaarDocumentUrl'].includes(name)).map(([name, label, type]) => (
                   type === 'upload' ? null : (
                     <FormField
                       key={name}
@@ -386,30 +637,12 @@ export default function OnboardingPage() {
                       type={type}
                       value={form[name] || ''}
                       onChange={handleChange}
+                      options={name === 'language' ? ['Telugu', 'Hindi', 'English'] : undefined}
                       required={farmerRequired.includes(name)}
                     />
                   )
                 ))}
                 {renderLocationSearch('Farm location', locationQuery || farmerAddressQuery || form.village, 'Enter village, mandal, district, state, or pincode')}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 w-full">
-                  <FormField label="Farm latitude" name="lat" type="number" step="any" value={form.lat || defaults.lat} onChange={handleChange} required />
-                  <FormField label="Farm longitude" name="lng" type="number" step="any" value={form.lng || defaults.lng} onChange={handleChange} required />
-                </div>
-                {form.lat && form.lng ? (
-                  <div className="landing-map-wrapper w-full overflow-hidden rounded-lg shadow-sm" style={{ marginTop: '8px' }}>
-                    <iframe
-                      title="Farm Location Map Preview"
-                      width="100%"
-                      height="200"
-                      frameBorder="0"
-                      scrolling="no"
-                      marginHeight={0}
-                      marginWidth={0}
-                      src={`https://www.openstreetmap.org/export/embed.html?bbox=${Number(form.lng) - 0.005},${Number(form.lat) - 0.005},${Number(form.lng) + 0.005},${Number(form.lat) + 0.005}&layer=mapnik&marker=${form.lat},${form.lng}`}
-                      style={{ border: 0, borderRadius: '8px', width: '100%' }}
-                    />
-                  </div>
-                ) : null}
                 <ImageUploadField
                   label="Aadhaar document"
                   value={form.aadhaarDocumentUrl || ''}
@@ -473,29 +706,17 @@ export default function OnboardingPage() {
                       <Search size={16} />
                       <span>{searchingLocation ? 'Searching...' : 'Search Location'}</span>
                     </button>
+                    <button
+                      type="button"
+                      onClick={useCurrentLocation}
+                      className="w-full sm:w-auto px-4 py-2 bg-white border border-slate-300 hover:border-slate-400 text-slate-700 font-medium rounded-md transition-all text-sm shadow-sm flex items-center justify-center gap-2 shrink-0 cursor-pointer"
+                      style={{ height: 48 }}
+                      disabled={searchingLocation}
+                    >
+                      <MapPin size={16} />
+                      <span>Use my location</span>
+                    </button>
                   </div>
-                </div>
-
-                {/* Responsive Latitude & Longitude Grid */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 w-full">
-                  <FormField
-                    label="Latitude"
-                    name="lat"
-                    type="number"
-                    step="any"
-                    value={form.lat || defaults.lat}
-                    onChange={handleChange}
-                    required
-                  />
-                  <FormField
-                    label="Longitude"
-                    name="lng"
-                    type="number"
-                    step="any"
-                    value={form.lng || defaults.lng}
-                    onChange={handleChange}
-                    required
-                  />
                 </div>
 
                 {form.lat && form.lng ? (

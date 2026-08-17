@@ -177,6 +177,7 @@ router.put('/users/me', async (req: Request, res: Response) => {
 
   if (req.body.name) user.name = req.body.name;
   if (req.body.email) user.email = req.body.email;
+  if (req.body.mobile) user.mobile = req.body.mobile;
   await upsertUser({
     id: user.id,
     mobile: user.mobile,

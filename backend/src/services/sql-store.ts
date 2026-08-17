@@ -261,6 +261,9 @@ export async function ensureTablesReady() {
     `ALTER TABLE kyc_submissions ADD COLUMN IF NOT EXISTS land_size_acres VARCHAR(40)`,
     `ALTER TABLE products ADD COLUMN IF NOT EXISTS shop_id VARCHAR(64)`,
     `ALTER TABLE users ADD COLUMN IF NOT EXISTS pin_hash TEXT`,
+    `ALTER TABLE service_locations ADD COLUMN IF NOT EXISTS pincode VARCHAR(20)`,
+    `ALTER TABLE service_locations ALTER COLUMN district DROP NOT NULL`,
+    `ALTER TABLE service_locations ALTER COLUMN city DROP NOT NULL`,
     `ALTER TABLE b2b_quotes ADD COLUMN IF NOT EXISTS order_id VARCHAR(64)`,
     `ALTER TABLE b2b_quotes ADD COLUMN IF NOT EXISTS order_status VARCHAR(20)`,
     `CREATE TABLE IF NOT EXISTS categories (
@@ -294,8 +297,9 @@ export async function ensureTablesReady() {
     `CREATE TABLE IF NOT EXISTS service_locations (
       id VARCHAR(64) PRIMARY KEY,
       state VARCHAR(120) NOT NULL,
-      district VARCHAR(120) NOT NULL,
-      city VARCHAR(120) NOT NULL,
+      district VARCHAR(120),
+      city VARCHAR(120),
+      pincode VARCHAR(20),
       status VARCHAR(20) NOT NULL DEFAULT 'active',
       lat DOUBLE PRECISION,
       lng DOUBLE PRECISION,
@@ -313,7 +317,7 @@ export async function ensureTablesReady() {
     `CREATE TABLE IF NOT EXISTS earnings_ledger (
       id VARCHAR(64) PRIMARY KEY,
       farmer_id VARCHAR(64) NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-      order_id VARCHAR(64) NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
+      order_id VARCHAR(64) REFERENCES orders(id) ON DELETE SET NULL,
       aswamithra_sale_value NUMERIC(12, 2) NOT NULL,
       local_mandi_value NUMERIC(12, 2) NOT NULL,
       extra_earned_amount NUMERIC(12, 2) NOT NULL,
@@ -1422,20 +1426,21 @@ export async function listServiceLocations() {
   return res.rows;
 }
 
-export async function insertServiceLocation(input: { id: string; state: string; district: string; city: string; status?: string; lat?: number | null; lng?: number | null; activeFarmers?: number | null; activeHubs?: number | null }) {
+export async function insertServiceLocation(input: { id: string; state: string; district?: string | null; city?: string | null; pincode?: string | null; status?: string; lat?: number | null; lng?: number | null; activeFarmers?: number | null; activeHubs?: number | null }) {
   await query(
-    `INSERT INTO service_locations (id, state, district, city, status, lat, lng, active_farmers, active_hubs)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+    `INSERT INTO service_locations (id, state, district, city, pincode, status, lat, lng, active_farmers, active_hubs)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
      ON CONFLICT (id) DO UPDATE SET
       state = EXCLUDED.state,
       district = EXCLUDED.district,
       city = EXCLUDED.city,
+      pincode = EXCLUDED.pincode,
       status = EXCLUDED.status,
       lat = EXCLUDED.lat,
       lng = EXCLUDED.lng,
       active_farmers = EXCLUDED.active_farmers,
       active_hubs = EXCLUDED.active_hubs`,
-    [input.id, input.state, input.district, input.city, input.status ?? 'active', input.lat ?? null, input.lng ?? null, input.activeFarmers ?? null, input.activeHubs ?? null],
+    [input.id, input.state, input.district ?? null, input.city ?? null, input.pincode ?? null, input.status ?? 'active', input.lat ?? null, input.lng ?? null, input.activeFarmers ?? null, input.activeHubs ?? null],
   );
 }
 

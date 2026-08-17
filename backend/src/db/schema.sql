@@ -137,7 +137,7 @@ CREATE TABLE IF NOT EXISTS notifications (
 CREATE TABLE IF NOT EXISTS earnings_ledger (
   id VARCHAR(64) PRIMARY KEY,
   farmer_id VARCHAR(64) NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  order_id VARCHAR(64) NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
+  order_id VARCHAR(64) REFERENCES orders(id) ON DELETE SET NULL,
   aswamithra_sale_value NUMERIC(12, 2) NOT NULL,
   local_mandi_value NUMERIC(12, 2) NOT NULL,
   extra_earned_amount NUMERIC(12, 2) NOT NULL,
@@ -190,8 +190,8 @@ CREATE TABLE IF NOT EXISTS market_prices (
 CREATE TABLE IF NOT EXISTS service_locations (
   id VARCHAR(64) PRIMARY KEY,
   state VARCHAR(120) NOT NULL,
-  district VARCHAR(120) NOT NULL,
-  city VARCHAR(120) NOT NULL,
+  district VARCHAR(120),
+  city VARCHAR(120),
   status VARCHAR(20) NOT NULL DEFAULT 'active' CHECK (status IN ('active','paused')),
   lat DOUBLE PRECISION,
   lng DOUBLE PRECISION,

@@ -1253,8 +1253,214 @@ td { font-weight: 400; word-break: break-word; }
   .table-shell td.actions-cell .payment-select-wrap {
     min-width: 0;
   }
-  .table-shell td.actions-cell .payment-select {
+.table-shell td.actions-cell .payment-select {
+  width: 100%;
+  min-width: 0;
+}
+
+}
+
+@media (max-width: 640px) {
+  .panel {
+    padding: 16px;
+  }
+
+  .panel-head-row {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+  }
+
+  .panel-head-row > * {
     width: 100%;
-    min-width: 0;
+  }
+
+  .panel-head-row .action-row {
+    width: 100%;
+    justify-content: stretch;
+  }
+
+  .panel-head-row .action-row .btn {
+    flex: 1 1 100%;
+  }
+
+  .status-pill.active {
+    width: 100%;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 10px 12px;
+  }
+
+  .status-pill.active .btn {
+    flex: 0 0 auto;
+  }
+
+  .status-pill {
+    white-space: normal;
+    text-align: left;
+  }
+}
+
+.notice {
+  padding: 12px 14px;
+}
+
+.plants-admin-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 16px;
+  margin-top: 18px;
+}
+
+.admin-plant-card {
+  position: relative;
+  overflow: hidden;
+  border-radius: 22px;
+  padding: 20px;
+  min-height: 180px;
+  color: #fff;
+  box-shadow: 0 18px 40px rgba(15, 23, 42, 0.16);
+  transform: translateY(0);
+  transition: transform 180ms ease, box-shadow 180ms ease, filter 180ms ease;
+  background:
+    radial-gradient(circle at top right, rgba(255, 255, 255, 0.24), transparent 28%),
+    radial-gradient(circle at bottom left, rgba(255, 255, 255, 0.12), transparent 35%),
+    linear-gradient(160deg, #115c2b 0%, #0f8a38 48%, #0b5a25 100%);
+}
+
+.admin-plant-card.two {
+  background:
+    radial-gradient(circle at top right, rgba(255, 255, 255, 0.22), transparent 28%),
+    radial-gradient(circle at bottom left, rgba(255, 255, 255, 0.11), transparent 35%),
+    linear-gradient(160deg, #315bd6 0%, #5c7cfa 48%, #2443a8 100%);
+}
+
+.admin-plant-card.three {
+  background:
+    radial-gradient(circle at top right, rgba(255, 255, 255, 0.2), transparent 28%),
+    radial-gradient(circle at bottom left, rgba(255, 255, 255, 0.1), transparent 35%),
+    linear-gradient(160deg, #ba5a11 0%, #ef8c31 48%, #9f4108 100%);
+}
+
+.admin-plant-card.four {
+  background:
+    radial-gradient(circle at top right, rgba(255, 255, 255, 0.2), transparent 28%),
+    radial-gradient(circle at bottom left, rgba(255, 255, 255, 0.1), transparent 35%),
+    linear-gradient(160deg, #7c3aed 0%, #a855f7 48%, #5b21b6 100%);
+}
+
+.admin-plant-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 24px 48px rgba(15, 23, 42, 0.22);
+}
+
+.admin-plant-orb {
+  position: absolute;
+  right: -18px;
+  top: -18px;
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.15);
+  filter: blur(0.5px);
+}
+
+.admin-plant-top {
+  display: grid;
+  gap: 6px;
+  position: relative;
+  z-index: 1;
+}
+
+.admin-plant-top span {
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  opacity: 0.85;
+}
+
+.admin-plant-top strong {
+  font-size: clamp(34px, 5vw, 54px);
+  line-height: 1;
+}
+
+.admin-plant-cluster {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 4px;
+  align-items: flex-end;
+  margin-top: 14px;
+  position: relative;
+  z-index: 1;
+  overflow: hidden;
+}
+
+.admin-plant-icon {
+  width: 18px;
+  height: 18px;
+  object-fit: contain;
+  filter: drop-shadow(0 6px 12px rgba(0, 0, 0, 0.16));
+  transform-origin: bottom center;
+  transition: transform 180ms ease, filter 180ms ease;
+}
+
+.admin-plant-icon:hover {
+  transform: translateY(-3px) scale(1.04);
+  filter: drop-shadow(0 10px 20px rgba(0, 0, 0, 0.2));
+}
+
+.admin-plant-number {
+  display: inline-flex;
+  align-items: center;
+  min-width: 40px;
+  min-height: 40px;
+  justify-content: center;
+  margin-top: 12px;
+  padding: 0 10px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.16);
+  backdrop-filter: blur(8px);
+  font-size: 15px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  position: relative;
+  z-index: 1;
+}
+
+.admin-plant-card p {
+  margin: 12px 0 0;
+  max-width: 240px;
+  position: relative;
+  z-index: 1;
+  font-size: 14px;
+  line-height: 1.5;
+  color: rgba(255, 255, 255, 0.88);
+}
+
+@media (max-width: 1024px) {
+  .plants-admin-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 640px) {
+  .plants-admin-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-plant-card {
+    min-height: 150px;
+    padding: 16px;
+    border-radius: 18px;
+  }
+
+  .admin-plant-cluster {
+    gap: 3px;
+  }
+
+  .admin-plant-icon {
+    width: 16px;
+    height: 16px;
   }
 }

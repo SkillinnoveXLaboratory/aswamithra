@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, useHistory } from 'react-router-dom';
 import {
   ArrowRight,
@@ -111,14 +111,39 @@ export default function LandingPage() {
   const history = useHistory();
   const { token, user } = useAuth();
   const { data: config } = useApi(() => endpoints.siteConfig(), fallbackConfig, []);
+  const [location, setLocation] = useState({ lat: fallbackConfig.map.mapLat, lng: fallbackConfig.map.mapLng, label: fallbackConfig.map.mapAddress });
+  const [locationError, setLocationError] = useState('');
+  const [radiusKm, setRadiusKm] = useState(50);
   const { data: productData, loading } = useApi(
-    () => endpoints.productsRadius({ lat: 16.5062, lng: 80.648, radiusKm: 50 }),
+    () => endpoints.productsRadius({ lat: location.lat, lng: location.lng, radiusKm }),
     { products: [] },
-    [],
+    [location.lat, location.lng, radiusKm],
   );
   const products = productData.products || [];
   const [activeTestimonial, setActiveTestimonial] = useState(0);
   const currentTestimonial = testimonials[activeTestimonial];
+
+  useEffect(() => {
+    if (!navigator.geolocation) {
+      setLocationError('Location access is not supported by this browser.');
+      return;
+    }
+
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        setLocation({
+          lat: Number(position.coords.latitude.toFixed(6)),
+          lng: Number(position.coords.longitude.toFixed(6)),
+          label: 'Using your live location',
+        });
+        setLocationError('');
+      },
+      () => {
+        setLocationError('Location permission was denied. Showing nearby products from Vijayawada.');
+      },
+      { enableHighAccuracy: true, timeout: 8000, maximumAge: 600000 },
+    );
+  }, []);
 
   const addToCart = async (product) => {
     if (!token || user?.role !== 'customer') {
@@ -147,7 +172,34 @@ export default function LandingPage() {
             <div className="trust-strip" id="trust">
               <span><ShieldCheck size={18} /> OTP login</span>
               <span><BadgeCheck size={18} /> KYC farmers</span>
-              <span><MapPin size={18} /> Radius discovery</span>
+              <span><MapPin size={18} /> {location.label}</span>
+            </div>
+            <div className="landing-location-card">
+              <div className="landing-location-top">
+                <div className="landing-location-badge">
+                  <MapPin size={18} />
+                  <div>
+                    <p>Location source</p>
+                    <strong>{location.label}</strong>
+                  </div>
+                </div>
+                <label className="landing-radius-field">
+                  <span>Nearby radius</span>
+                  <select value={radiusKm} onChange={(e) => setRadiusKm(Number(e.target.value))}>
+                    <option value={10}>10 km</option>
+                    <option value={25}>25 km</option>
+                    <option value={50}>50 km</option>
+                    <option value={100}>100 km</option>
+                  </select>
+                </label>
+              </div>
+              <div className={`landing-location-note${locationError ? ' error' : ''}`}>
+                <span className="landing-location-pulse" aria-hidden="true" />
+                <div>
+                  <p>{locationError ? 'Location update needed' : 'Auto refresh active'}</p>
+                  {locationError || 'Products refresh automatically using your browser location.'}
+                </div>
+              </div>
             </div>
           </div>
           <div className="landing-hero-image">
@@ -251,8 +303,8 @@ export default function LandingPage() {
       <section className="product-highlight" id="products">
         <div className="section-heading">
           <span className="eyebrow"><Sprout size={17} /> Live marketplace preview</span>
-          <h2>Fresh products from farmers near Vijayawada.</h2>
-          <p>Live listings loaded from the backend radius API.</p>
+          <h2>Fresh products from farmers near you.</h2>
+          <p>Live listings loaded from the backend radius API using your browser location.</p>
         </div>
         {loading ? <StateBlock type="loading" title="Loading fresh products" /> : null}
         <div className="products-grid landing-products">
@@ -351,6 +403,22 @@ export default function LandingPage() {
             <Mail className="landing-news-icon" size={40} />
             <h3>Sign up to our newsletter</h3>
             <p>Get updates on new farmers, seasonal produce, and platform features.</p>
+            <div style={{ margin: '14px 0 10px', display: 'grid', gap: '10px' }}>
+              <div className="landing-f-contact" style={{ margin: 0 }}>
+                <Mail size={20} />
+                <div>
+                  <p>General enquiries</p>
+                  <h4>support@aswamithra.in</h4>
+                </div>
+              </div>
+              <div className="landing-f-contact" style={{ margin: 0 }}>
+                <Phone size={20} />
+                <div>
+                  <p>Give us a call</p>
+                  <h4>+91 98765 43210</h4>
+                </div>
+              </div>
+            </div>
             <form onSubmit={(event) => event.preventDefault()}>
               <input type="email" placeholder="Email address*" required />
               <button type="submit" className="btn btn-primary full">Subscribe <ArrowRight size={16} /></button>
@@ -358,22 +426,7 @@ export default function LandingPage() {
             </div>
 
           <div className="landing-footer-top">
-            <div className="landing-footer-contacts">
-              <div className="landing-f-contact">
-                <Mail size={24} />
-                <div>
-                  <p>General enquiries</p>
-                  <h4>support@aswamithra.in</h4>
-                </div>
-              </div>
-              <div className="landing-f-contact">
-                <Phone size={24} />
-                <div>
-                  <p>Give us a call</p>
-                  <h4>+91 98765 43210</h4>
-                </div>
-              </div>
-            </div>
+            <div className="landing-footer-contacts" />
             {config?.map?.mapLat && config?.map?.mapLng ? (
               <div className="landing-footer-map">
                 <iframe

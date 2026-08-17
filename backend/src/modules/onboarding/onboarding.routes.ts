@@ -189,6 +189,7 @@ router.post('/onboarding/customer', (req: Request, res: Response) => {
   const user = req.body.mobile ? db.users.find((u) => u.mobile === req.body.mobile) : db.users[0];
   if (user) {
     if (req.body.name) user.name = req.body.name;
+    if (req.body.email) user.email = req.body.email;
     user.status = 'active';
   }
   if (user) {
@@ -197,7 +198,7 @@ router.post('/onboarding/customer', (req: Request, res: Response) => {
       mobile: user.mobile,
       name: user.name,
       role: user.role,
-      email: user.email ?? null,
+      email: req.body.email || user.email || null,
       status: user.status,
       language: user.language,
       avatarUrl: user.avatar ?? null,

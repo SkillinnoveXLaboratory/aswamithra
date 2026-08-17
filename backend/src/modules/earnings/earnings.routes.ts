@@ -95,7 +95,7 @@ router.post('/admin/farmers/earnings-ledger', async (req: Request, res: Response
   const newEntry = {
     id: 'ern_' + Date.now(),
     farmerId: req.body.farmerId || 'farmer_881',
-    orderId: req.body.orderId || 'ord_000',
+    orderId: req.body.orderId || null,
     aswamithraSaleValue: parseFloat(req.body.aswamithraSaleValue) || 500,
     localMandiValue: parseFloat(req.body.localMandiValue) || 400,
     extraEarnedAmount: parseFloat(req.body.extraEarnedAmount) || 100,
