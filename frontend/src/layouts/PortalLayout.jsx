@@ -17,7 +17,7 @@ export default function PortalLayout({ role, title, subtitle, nav, children, acc
 
   const handleLogout = async () => {
     await logout();
-    history.push('/login');
+    history.replace('/');
   };
 
   return (
