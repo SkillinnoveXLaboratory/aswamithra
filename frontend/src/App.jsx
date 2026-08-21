@@ -9,58 +9,62 @@ import B2BPortal from './pages/B2BPortal.jsx';
 import AdminPortal from './pages/AdminPortal.jsx';
 import NotFoundPage from './pages/NotFoundPage.jsx';
 import ProtectedRoute from './routes/ProtectedRoute.jsx';
+import GoogleTranslateWidget from './components/GoogleTranslateWidget.jsx';
 
 export default function App() {
   return (
-    <Switch>
-      <Route exact path="/" component={LandingPage} />
-      <Route path="/login" component={LoginPage} />
-      <Route
-        path="/onboarding/:role"
-        render={() => (
-          <ProtectedRoute allowOnboarding>
-            <OnboardingPage />
-          </ProtectedRoute>
-        )}
-      />
-      <Route
-        path="/pending/:role"
-        component={PendingPage}
-      />
-      <Route
-        path="/customer"
-        render={() => (
-          <ProtectedRoute allowedRoles={['customer']}>
-            <CustomerPortal />
-          </ProtectedRoute>
-        )}
-      />
-      <Route
-        path="/farmer"
-        render={() => (
-          <ProtectedRoute allowedRoles={['farmer']}>
-            <FarmerPortal />
-          </ProtectedRoute>
-        )}
-      />
-      <Route
-        path="/b2b"
-        render={() => (
-          <ProtectedRoute allowedRoles={['b2b']}>
-            <B2BPortal />
-          </ProtectedRoute>
-        )}
-      />
-      <Route
-        path="/admin"
-        render={() => (
-          <ProtectedRoute allowedRoles={['admin']}>
-            <AdminPortal />
-          </ProtectedRoute>
-        )}
-      />
-      <Route path="/home" render={() => <Redirect to="/" />} />
-      <Route component={NotFoundPage} />
-    </Switch>
+    <>
+      <GoogleTranslateWidget />
+      <Switch>
+        <Route exact path="/" component={LandingPage} />
+        <Route path="/login" component={LoginPage} />
+        <Route
+          path="/onboarding/:role"
+          render={() => (
+            <ProtectedRoute allowOnboarding>
+              <OnboardingPage />
+            </ProtectedRoute>
+          )}
+        />
+        <Route
+          path="/pending/:role"
+          component={PendingPage}
+        />
+        <Route
+          path="/customer"
+          render={() => (
+            <ProtectedRoute allowedRoles={['customer']}>
+              <CustomerPortal />
+            </ProtectedRoute>
+          )}
+        />
+        <Route
+          path="/farmer"
+          render={() => (
+            <ProtectedRoute allowedRoles={['farmer']}>
+              <FarmerPortal />
+            </ProtectedRoute>
+          )}
+        />
+        <Route
+          path="/b2b"
+          render={() => (
+            <ProtectedRoute allowedRoles={['b2b']}>
+              <B2BPortal />
+            </ProtectedRoute>
+          )}
+        />
+        <Route
+          path="/admin"
+          render={() => (
+            <ProtectedRoute allowedRoles={['admin']}>
+              <AdminPortal />
+            </ProtectedRoute>
+          )}
+        />
+        <Route path="/home" render={() => <Redirect to="/" />} />
+        <Route component={NotFoundPage} />
+      </Switch>
+    </>
   );
 }
